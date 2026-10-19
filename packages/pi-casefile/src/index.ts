@@ -13,18 +13,18 @@ import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-age
 import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { type TSchema, Type } from "typebox";
 import {
+  type Attestation,
+  buildAttestation,
+  signAttestation,
+  verifyAttestation,
+} from "./attestation.ts";
+import {
   CANARY_ASSESSMENT_VALUES,
   CONFIRM_DIFFERENTIAL_VALUES,
   CONFIRM_VERDICT_VALUES,
   SEVERITY_MATCH_VALUES,
   validateMainAgentVerdict,
 } from "./evidence.ts";
-import {
-  type Attestation,
-  buildAttestation,
-  signAttestation,
-  verifyAttestation,
-} from "./attestation.ts";
 import {
   controlTargetAuthorizationError,
   type HarnessVerifyResult,
@@ -104,7 +104,9 @@ import {
 /** `pi-casefile <version>`, read best-effort from the package manifest for the attestation's provenance line. */
 const GENERATOR = (() => {
   try {
-    const pkg = JSON.parse(readFileSync(join(dirname(import.meta.dirname), "package.json"), "utf8"));
+    const pkg = JSON.parse(
+      readFileSync(join(dirname(import.meta.dirname), "package.json"), "utf8"),
+    );
     return `pi-casefile ${pkg.version ?? ""}`.trim();
   } catch {
     return "pi-casefile";
@@ -1612,7 +1614,8 @@ ${formatCaseDetail(record)}`,
         ),
         include_coverage: Type.Optional(
           Type.Boolean({
-            description: "Commit the case's (asset × class) coverage matrix as a leaf (default true)",
+            description:
+              "Commit the case's (asset × class) coverage matrix as a leaf (default true)",
           }),
         ),
       },
@@ -1648,7 +1651,9 @@ ${formatCaseDetail(record)}`,
       // Self-check: a written attestation must verify, or we never emit it.
       const check = verifyAttestation(attestation);
       if (!check.ok) {
-        throw new Error(`Refusing to write an attestation that fails self-verification: ${check.errors.join("; ")}`);
+        throw new Error(
+          `Refusing to write an attestation that fails self-verification: ${check.errors.join("; ")}`,
+        );
       }
 
       const outPath = getAttestationPath(record);

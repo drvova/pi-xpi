@@ -17,26 +17,22 @@ XPI runs on **Pi Agent** (`@earendil-works/pi-coding-agent`) and its fork **OMP*
 
 | Variable | Package | Purpose |
 |----------|---------|---------|
-| `PREVIEW_IS_API_KEY` | webxp | Required for `exploit_search` ([preview.is](https://preview.is)) |
 | `PI_ATTEST_KEY` | casefile | Path to an Ed25519 PKCS#8 PEM private key for signing `CaseAttest` manifests (unsigned if unset) |
 | `PI_ATTEST_KEY_PEM` | casefile | Inline Ed25519 PEM (takes precedence over `PI_ATTEST_KEY`) |
 | `PI_XP_MODE` | casefile | `on` / `swarm` / `lite` / `off` — force casefile cyber-workflow injection (`on` is the default enabled mode: swarm; `lite` disables subagent dispatch) |
 | `PI_CASEFILE_PATH` | casefile | Override SQLite ledger path |
-| `PI_WEBSEARCH_PORT` | webxp | open-websearch daemon port (default `3210`) |
 
-```bash
-export PREVIEW_IS_API_KEY="rk_yourkeyhere"
-```
+The research tools below (`web_search`, `web_fetch`, `exploit_search`, `context7`, `deepwiki`, `http_request`) are provided by the host agent environment, not bundled by XPI; their configuration (API keys, endpoints) is managed by the host.
 
 ## Tools
 
 | Tool | Use for |
 |------|---------|
-| `exploit_search` | Attack techniques, primitives, bypasses (`PREVIEW_IS_API_KEY`) |
-| `web_search` | CVEs, advisories, documentation |
-| `web_fetch` | Page content from an HTTP(S) URL |
-| `context7` | Current library docs |
-| `deepwiki` | Q&A on a public GitHub repo |
+| `exploit_search` | Attack techniques, primitives, bypasses (host-provided) |
+| `web_search` | CVEs, advisories, documentation (host-provided) |
+| `web_fetch` | Page content from an HTTP(S) URL (host-provided) |
+| `context7` | Current library docs (host-provided) |
+| `deepwiki` | Q&A on a public GitHub repo (host-provided) |
 | `CaseAdd` / `CaseUpdate` / `PromoteFinding` / `ConfirmFinding` | Ledger + two-phase PoC gate. PromoteFinding picks a differential `mode`: **`inter_host`** (default) runs the PoC twice on target + once on an operator-approved control host for body-carried proof (file read, injection, info leak, reflection); **`intra_target`** proves access-control / business-logic classes (IDOR, auth bypass, privilege escalation, logic) with a same-host `baseline` request declared in the evidence (`verify.mode:"intra_target"`) — the harness sends attack + baseline to the target and requires the proof on the attack only, no control host. Both validate nonce-bound response-body evidence, then a DNS-pinned replay requiring a conclusive `target_only` differential. Reflection requests can add a post-PoC harness-generated canary that must appear only on target. Zero exit is run integrity, never proof. ConfirmFinding is main-agent-only, captures a fresh second replay, and binds it to the semantic verdict; worker/subagent gate calls are rejected. Private replay is operator-gated; blind/OOB claims fail closed without source separation |
 | `EvidenceAdd` | Role-typed, hashed evidence items (observation/reproduction/impact/refutation/cleanup); refutation justifies kills; reproduction auto-recorded by the PoC gate |
 | `CaseGet` / `CaseList` / `CaseSearch` | Browse cases |
@@ -116,7 +112,6 @@ pi-xpi/
 ├── packages/
 │   ├── pi-casefile          # ledger, poc-runner, workflow, scratchpad, attestation (+ bin/xpi-verify)
 │   ├── pi-shared
-│   ├── pi-webxp
 │   └── pi-xtodo
 ├── schemas/                 # stage-finding, stage-trace, stage-skeptic, stage-validation, stage-chain, stage-report
 ├── scripts/                 # bump-version

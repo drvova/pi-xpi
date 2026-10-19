@@ -103,9 +103,6 @@ if [[ "$HOST" == "omp" ]]; then
   done
 
   echo
-  echo "Optional environment variables:"
-  echo "  export PREVIEW_IS_API_KEY=\"rk_yourkeyhere\"  # https://preview.is"
-  echo
   echo "XPI installed on OMP. Use /xp for the bounded swarm pipeline, or /xp lite for single-agent mode."
   echo "OMP ships its own grep/find — XPI's ast-grep structural search is Pi-only."
   exit 0
@@ -127,8 +124,5 @@ fi
 npm install -g @ast-grep/cli >/dev/null 2>&1 || echo "ast-grep CLI install skipped (install @ast-grep/cli or cargo install ast-grep manually)"
 "$PI_BIN" install "npm:pi-ast-grep" || echo "Optional npm:pi-ast-grep install skipped"
 
-echo
-echo "Optional environment variables:"
-echo '  export PREVIEW_IS_API_KEY="rk_yourkeyhere"  # https://preview.is'
 echo
 echo "XPI installed. Use /xp for the bounded swarm pipeline, or /xp lite for single-agent mode."

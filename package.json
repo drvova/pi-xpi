@@ -1,7 +1,7 @@
 {
   "name": "@xaccefy/pi-xpi",
   "version": "0.9.4",
-  "description": "XPI — offensive security tools for Pi Agent. Casefile tracking, web search, library docs, exploit technique search, and todo tracking.",
+  "description": "XPI — offensive security tools for Pi Agent. Casefile tracking with enforced gates, proof-carrying attestations, structural code search, and todo tracking.",
   "keywords": [
     "pi-package",
     "pi-extension",
@@ -10,8 +10,7 @@
     "bug-bounty",
     "pentest",
     "ctf",
-    "exploit",
-    "web-search"
+    "exploit"
   ],
   "type": "module",
   "license": "MIT",
@@ -38,7 +37,7 @@
     "docs/",
     "packages/pi-casefile/src/",
     "packages/pi-casefile/skills/",
-    "packages/pi-webxp/src/",
+    "packages/pi-casefile/bin/",
     "packages/pi-xtodo/index.ts",
     "install.sh",
     "README.md",
@@ -47,7 +46,6 @@
   "pi": {
     "extensions": [
       "./packages/pi-casefile/src/index.ts",
-      "./packages/pi-webxp/src/index.ts",
       "./packages/pi-xtodo/index.ts"
     ],
     "skills": [
@@ -61,8 +59,6 @@
   },
   "dependencies": {
     "@xaccefy/pi-shared": "0.9.4",
-    "open-websearch": "^2.1.11",
-    "tough-cookie": "^6.0.2",
     "undici": "^8.9.0"
   },
   "devDependencies": {
@@ -95,7 +91,6 @@
     "test": "bun test --isolate",
     "bench": "bun bench/run.ts",
     "test:casefile": "bun test --isolate packages/pi-casefile",
-    "test:webxp": "bun test --isolate packages/pi-webxp",
     "test:xtodo": "bun test --isolate packages/pi-xtodo",
     "lint": "biome check .",
     "lint:fix": "biome check . --write",

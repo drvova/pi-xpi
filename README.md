@@ -2,7 +2,7 @@
 
 # XPI
 
-**Security tooling for the Pi agent** — casefile tracking, web search, exploit-technique intelligence, code search, and todos.
+**Security tooling for the Pi agent** — casefile tracking, proof-carrying attestations, code search, and todos.
 
 [![npm version](https://img.shields.io/npm/v/@xaccefy/pi-xpi?style=flat-square&label=npm&color=cb3837)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
 [![npm downloads](https://img.shields.io/npm/dm/@xaccefy/pi-xpi?style=flat-square&label=downloads&color=4c9aff)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
@@ -12,7 +12,7 @@
 
 ## What it is
 
-XPI turns the Pi agent into a security researcher: a case ledger with enforced gates, real exploit-technique grounding, web lookup, fast code search, and a pipeline that keeps findings honest.
+XPI turns the Pi agent into a security researcher: a case ledger with enforced gates, exploit-technique grounding and web lookup (via the host's research tools), fast code search, and a pipeline that keeps findings honest.
 
 - **Casefile** — hypothesis → investigating → confirmed → reported, with gates at every step
 - **Machine-owned PoC gates** — zero exit is necessary but never proof: direct-response findings require nonce-bound body evidence plus a DNS-pinned, conclusive `target_only` replay against an operator-approved control; reflection-capable requests can add a harness-generated target-only canary; only the main agent may make the semantic decision and commit phase 2
@@ -39,8 +39,6 @@ pi install npm:@xaccefy/pi-xpi     # Pi
 omp install npm:@xaccefy/pi-xpi    # OMP
 ```
 
-Set `PREVIEW_IS_API_KEY` for `exploit_search` (see [docs/guide.md](docs/guide.md)).
-
 ## Quick start
 
 ```
@@ -59,7 +57,6 @@ Full tool reference, configuration, and pipeline docs: **[docs/guide.md](docs/gu
 |---------|-----|
 | Umbrella | [`@xaccefy/pi-xpi`](https://www.npmjs.com/package/@xaccefy/pi-xpi) |
 | Case ledger | [`@xaccefy/pi-casefile`](https://www.npmjs.com/package/@xaccefy/pi-casefile) |
-| Web lookup + exploit search | [`@xaccefy/pi-webxp`](https://www.npmjs.com/package/@xaccefy/pi-webxp) |
 | Todos | [`@xaccefy/pi-xtodo`](https://www.npmjs.com/package/@xaccefy/pi-xtodo) |
 
 ## Develop
