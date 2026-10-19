@@ -18,6 +18,8 @@ XPI runs on **Pi Agent** (`@earendil-works/pi-coding-agent`) and its fork **OMP*
 | Variable | Package | Purpose |
 |----------|---------|---------|
 | `PREVIEW_IS_API_KEY` | webxp | Required for `exploit_search` ([preview.is](https://preview.is)) |
+| `PI_ATTEST_KEY` | casefile | Path to an Ed25519 PKCS#8 PEM private key for signing `CaseAttest` manifests (unsigned if unset) |
+| `PI_ATTEST_KEY_PEM` | casefile | Inline Ed25519 PEM (takes precedence over `PI_ATTEST_KEY`) |
 | `PI_XP_MODE` | casefile | `on` / `swarm` / `lite` / `off` — force casefile cyber-workflow injection (`on` is the default enabled mode: swarm; `lite` disables subagent dispatch) |
 | `PI_CASEFILE_PATH` | casefile | Override SQLite ledger path |
 | `PI_WEBSEARCH_PORT` | webxp | open-websearch daemon port (default `3210`) |
@@ -41,6 +43,7 @@ export PREVIEW_IS_API_KEY="rk_yourkeyhere"
 | `CaseLink` / `CaseUnlink` | Exploit chains |
 | `ChainSuggest` | Auto-detect exploitable chain combinations across cases (credential+endpoint→ATO, XSS+state-change→CSRF, SSTI→RCE, race+payment, …), ranked — verify before linking |
 | `CoverageAdd` / `CoverageReport` | Machine-checkable test coverage: record (asset × attack-class) cells with wide/local scope, linked to artifact-backed evidence items (`evidence_item_id`); unbacked cells render as ⚠ unbacked, and the plateau claim must match the matrix |
+| `CaseAttest` | **Proof-carrying attestation** — emit a canonical, hash-chained, optionally Ed25519-signed manifest binding the finding, evidence hashes, PoC hash, and the phase-1/phase-2 `target_only` differential into one tamper-evident file. A triager runs `xpi-verify` to recompute the chain and check the signature without trusting the researcher or re-testing live. Main-agent-only; refuses any case that did not pass the full gate. Certifies gate integrity, not current live vulnerability. See [docs/attestation.md](attestation.md) |
 | `CaseContext` | Case context bundle (complete record + artifacts) for the main agent's final report |
 | `PipelineSubmit` | Stage-output validation gate: schema check + pre-filter + repair budget — stage can't advance on invalid output |
 | `ScratchpadInit` / `Resume` / `Checkpoint` | Crash-recoverable artifact store for pipeline runs |
@@ -80,13 +83,38 @@ XPI uses [ast-grep](https://ast-grep.github.io) (`pi-ast-grep`) for **structural
 
 Structural search does **not** replace lexical search. Text patterns (error strings, config, saved HTTP responses, minified bundles, non-code files) still go through pi's built-in `grep`/`find`. Rule of thumb for the auditor/tracer/skeptic agents: **`ast_grep` for code shape, `grep`/`find` for raw text.** Neither uses `bash` — never shell out to `rg`/`grep`/`ast-grep` for code search.
 
+## Proof-carrying attestation
+
+The confirmation gate computes trust but, until now, never exported it: a
+shipped report collapsed the whole gate into prose a triager had to take on
+faith. `CaseAttest` closes that gap. After `ConfirmFinding` promotes a case, it
+serializes the gate's own outputs — the PoC hash, nonce-bound evidence hashes,
+and the phase-1/phase-2 `target_only` differential verdicts — into a canonical,
+hash-chained manifest, optionally Ed25519-signed, written next to the report.
+
+A triager, customer, or resuming agent runs the zero-dependency verifier:
+
+```bash
+xpi-verify <slug>-<case>.attestation.json                 # recompute chain + check signature
+xpi-verify att.json --key-fingerprint <sha256>            # pin the signer
+```
+
+It recomputes every leaf from the content, confirms the order-committing chain
+root, and verifies the signature — **without trusting the researcher and
+without re-running anything live**. The internal rule is "zero exit is never
+proof"; this is its external twin, "prose is never proof." An attestation
+certifies that the gate ran and produced a target-only differential at
+`confirmed_at` — it is an integrity proof, **not** a live re-test, and says
+nothing about whether the target is still vulnerable. Full format, chain
+construction, and key setup: **[docs/attestation.md](attestation.md)**.
+
 ## Structure
 
 ```
 pi-xpi/
 ├── agents/                  # auditor, tracer, skeptic, chain
 ├── packages/
-│   ├── pi-casefile          # ledger, poc-runner, workflow, scratchpad
+│   ├── pi-casefile          # ledger, poc-runner, workflow, scratchpad, attestation (+ bin/xpi-verify)
 │   ├── pi-shared
 │   ├── pi-webxp
 │   └── pi-xtodo

@@ -1,13 +1,13 @@
 /**
  * Casefile — offensive security case tracker for Pi.
  *
- * Tools: CaseAdd, CaseUpdate, PromoteFinding, ConfirmFinding, EvidenceAdd, CoverageAdd, CoverageReport, ChainSuggest, CaseGet, CaseList, CaseSearch, CaseLink, CaseUnlink, CaseContext, PipelineSubmit, ScratchpadInit, ScratchpadResume, ScratchpadCheckpoint, ScratchpadWrite, ScratchpadRead, ScratchpadPhaseDone, ScratchpadClear
+ * Tools: CaseAdd, CaseUpdate, PromoteFinding, ConfirmFinding, CaseAttest, EvidenceAdd, CoverageAdd, CoverageReport, ChainSuggest, CaseGet, CaseList, CaseSearch, CaseLink, CaseUnlink, CaseContext, PipelineSubmit, ScratchpadInit, ScratchpadResume, ScratchpadCheckpoint, ScratchpadWrite, ScratchpadRead, ScratchpadPhaseDone, ScratchpadClear
  * Command: /casefile — interactive dashboard
  * Event: before_agent_start — injects cyber workflow once per session, refreshes the active case list per prompt
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
@@ -19,6 +19,12 @@ import {
   SEVERITY_MATCH_VALUES,
   validateMainAgentVerdict,
 } from "./evidence.ts";
+import {
+  type Attestation,
+  buildAttestation,
+  signAttestation,
+  verifyAttestation,
+} from "./attestation.ts";
 import {
   controlTargetAuthorizationError,
   type HarnessVerifyResult,
@@ -50,6 +56,7 @@ import {
   formatCase,
   formatCaseDetail,
   formatCases,
+  getAttestationPath,
   getCaseById,
   getCasefilePath,
   LINK_KIND_VALUES,
@@ -91,6 +98,38 @@ import {
   STATIC_CYBER_WORKFLOW_LITE,
   STATIC_CYBER_WORKFLOW_OMP,
 } from "./workflow.ts";
+
+// ── Attestation generator identity + signing key ─────────────────────
+
+/** `pi-casefile <version>`, read best-effort from the package manifest for the attestation's provenance line. */
+const GENERATOR = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(join(dirname(import.meta.dirname), "package.json"), "utf8"));
+    return `pi-casefile ${pkg.version ?? ""}`.trim();
+  } catch {
+    return "pi-casefile";
+  }
+})();
+
+/**
+ * The Ed25519 signing key for attestations, if the operator configured one:
+ * `PI_ATTEST_KEY_PEM` (inline PKCS#8 PEM) takes precedence over `PI_ATTEST_KEY`
+ * (a path to a PEM file). Absent → attestations are built unsigned (still
+ * integrity-checkable, just not authenticated to a researcher identity).
+ */
+function readAttestationKey(): string | undefined {
+  const inline = process.env.PI_ATTEST_KEY_PEM?.trim();
+  if (inline) return inline;
+  const path = process.env.PI_ATTEST_KEY?.trim();
+  if (!path) return undefined;
+  try {
+    return readFileSync(path, "utf8");
+  } catch (err) {
+    throw new Error(
+      `PI_ATTEST_KEY points at ${path} but it could not be read: ${(err as Error).message}`,
+    );
+  }
+}
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -1548,6 +1587,110 @@ ${formatCaseDetail(record)}`,
         );
       },
     });
+
+  // ── Tool: CaseAttest ──
+
+  registerCaseTool({
+    name: "CaseAttest",
+    label: "Attest Finding",
+    description:
+      "Emit a proof-carrying attestation for a CONFIRMED case: a canonical, hash-chained manifest that binds the finding, its evidence hashes, the PoC script hash, and the phase-1/phase-2 differential replay verdicts into one tamper-evident file, optionally Ed25519-signed. A triager runs `xpi-verify <file>` to recompute the chain and check the signature WITHOUT trusting the researcher or re-running anything live. Main-agent-only. Rejected unless the case passed the full gate (CONFIRMED + target-only phase-2 replay). It certifies gate integrity and reproducible hashes — NOT that the target is still vulnerable at verification time.",
+    promptSnippet: "Emit a verifiable, signed attestation for a confirmed finding",
+    promptGuidelines: [
+      "Run only in the main agent, after ConfirmFinding has promoted the case to confirmed.",
+      "Set PI_ATTEST_KEY (PEM file path) or PI_ATTEST_KEY_PEM (inline) to sign; publish the public-key fingerprint (e.g. in security.txt) so triagers can pin it. Without a key the attestation is unsigned but still integrity-checkable.",
+      "Attach the written attestation.json to the report. The attestation proves the gate ran and produced a target-only differential — it is not a live re-test; do not describe it as one.",
+    ],
+    parameters: Type.Object(
+      {
+        id: Type.String({ description: "Case ID (must be confirmed)" }),
+        sign: Type.Optional(
+          Type.Boolean({
+            description:
+              "Sign the chain root when a key is configured (default true). No key → unsigned.",
+          }),
+        ),
+        include_coverage: Type.Optional(
+          Type.Boolean({
+            description: "Commit the case's (asset × class) coverage matrix as a leaf (default true)",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+
+    async execute(_id, params, _signal, _onUpdate, _ctx) {
+      if (isSubagentProcess()) {
+        throw new Error(
+          "CaseAttest is reserved for the main/coordinator agent — the same gate that owns ConfirmFinding.",
+        );
+      }
+      const record = getCaseById(params.id as string);
+      if (!record) throw new Error(`Case not found: ${params.id}`);
+
+      let attestation: Attestation = buildAttestation(record, {
+        generator: GENERATOR,
+        includeCoverage: params.include_coverage !== false,
+      });
+
+      const wantSign = params.sign !== false;
+      const key = wantSign ? readAttestationKey() : undefined;
+      let signed = false;
+      let note = "";
+      if (wantSign && key) {
+        attestation = signAttestation(attestation, key);
+        signed = true;
+      } else if (wantSign) {
+        note =
+          " (UNSIGNED — set PI_ATTEST_KEY or PI_ATTEST_KEY_PEM to authenticate it to your researcher key)";
+      }
+
+      // Self-check: a written attestation must verify, or we never emit it.
+      const check = verifyAttestation(attestation);
+      if (!check.ok) {
+        throw new Error(`Refusing to write an attestation that fails self-verification: ${check.errors.join("; ")}`);
+      }
+
+      const outPath = getAttestationPath(record);
+      mkdirSync(dirname(outPath), { recursive: true });
+      writeFileSync(outPath, `${JSON.stringify(attestation, null, 2)}\n`, "utf8");
+
+      const fingerprint = attestation.signature?.public_key_fingerprint;
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Attestation written: ${outPath}${note}\n` +
+              `chain_root: ${attestation.chain_root}\n` +
+              `signed: ${signed}${fingerprint ? ` (key ${fingerprint.slice(0, 16)}…)` : ""}\n` +
+              `Verify with: xpi-verify ${outPath}`,
+          },
+        ],
+        details: {
+          path: outPath,
+          signed,
+          chainRoot: attestation.chain_root,
+          fingerprint,
+        },
+      };
+    },
+
+    renderCall(args, theme) {
+      return callLine(theme, "CaseAttest", (args.id as string) ?? "");
+    },
+
+    renderResult(result, _opts, theme) {
+      const details = result.details as { signed?: boolean } | undefined;
+      return new Text(
+        details?.signed
+          ? theme.fg("success", "✓ Attested (signed)")
+          : theme.fg("warning", "✓ Attested (unsigned)"),
+        0,
+        0,
+      );
+    },
+  });
 
   // ── Tool: CaseGet ──
 

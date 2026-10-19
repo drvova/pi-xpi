@@ -219,6 +219,7 @@ describe("casefile extension", () => {
 
     expect([...pi.tools.keys()].sort()).toEqual([
       "CaseAdd",
+      "CaseAttest",
       "CaseContext",
       "CaseGet",
       "CaseLink",

@@ -32,6 +32,7 @@
   },
   "files": [
     "src/index.ts",
+    "src/attestation.ts",
     "src/evidence.ts",
     "src/harness-verify.ts",
     "src/safe-state.ts",
@@ -43,11 +44,15 @@
     "src/pipeline-submit.ts",
     "src/scratchpad.ts",
     "src/sqlite-compat/index.ts",
+    "bin/xpi-verify.ts",
     "skills",
     "README.md",
     "LICENSE"
   ],
   "main": "src/index.ts",
+  "bin": {
+    "xpi-verify": "bin/xpi-verify.ts"
+  },
   "dependencies": {
     "@xaccefy/pi-shared": "0.9.4",
     "undici": "^8.9.0"

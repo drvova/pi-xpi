@@ -18,6 +18,7 @@ XPI turns the Pi agent into a security researcher: a case ledger with enforced g
 - **Machine-owned PoC gates** — zero exit is necessary but never proof: direct-response findings require nonce-bound body evidence plus a DNS-pinned, conclusive `target_only` replay against an operator-approved control; reflection-capable requests can add a harness-generated target-only canary; only the main agent may make the semantic decision and commit phase 2
 - **Exploit chains** — `ChainSuggest` surfaces combinations the model missed
 - **Coverage matrix** — machine-checkable "we tested everything" claims
+- **Proof-carrying attestations** — `CaseAttest` emits a canonical, hash-chained, Ed25519-signed manifest of a confirmed finding; a triager runs `xpi-verify` to recompute the chain and check the signature without trusting the researcher or re-testing live
 - **Code search** — structural AST search (ast-grep) for sinks and call chains, plus built-in grep/find for text
 
 ## Install

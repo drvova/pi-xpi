@@ -598,6 +598,23 @@ export function setCasefilePath(path: string | undefined): void {
   dbInstance = undefined; // Force reconnection on next getDb
 }
 
+/** Stable file-safe slug from a case title (shared by report + attestation paths). */
+export function caseSlug(title: string): string {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 70) || "case"
+  );
+}
+
+/** Absolute path of a case's attestation file, under the same report/ dir as its context. */
+export function getAttestationPath(record: CaseRecord): string {
+  const reportDir = join(dirname(getCasefilePath()), "report");
+  return join(reportDir, `${caseSlug(record.title)}-${record.id}.attestation.json`);
+}
+
 // ── SQLite Schema Init ────────────────────────────────────────────────
 
 function getDb(): DatabaseSync {
@@ -3395,12 +3412,7 @@ export function writeCaseContext(id: string): CaseContextResult {
   const reportDir = join(dirname(dbPath), "report");
   mkdirSync(reportDir, { recursive: true });
 
-  const slug =
-    current.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 70) || "case";
+  const slug = caseSlug(current.title);
   // The final report path: the main agent writes the polished report here.
   // A previously recorded reportPath is kept stable across calls (the report
   // file may already exist at it); otherwise derive the default.
