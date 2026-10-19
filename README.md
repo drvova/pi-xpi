@@ -23,13 +23,14 @@ XPI turns the Pi agent into a security researcher: a case ledger with enforced g
 
 ## Install
 
-Works on **Pi Agent** and its fork **OMP** (`@oh-my-pi/pi-coding-agent`). Each host has its own native entry point — `pi.extensions` → `index.ts` (Pi's `@earendil-works/*`), `omp.extensions` → `index.omp.ts` (OMP's `@oh-my-pi/*`) — over a shared host-agnostic core, so neither build pulls in the other host's packages. The `omp` manifest adds a typed settings schema; skills and the specialist `task` agents load by convention; the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
+Works on **Pi Agent**, its fork **OMP** (`@oh-my-pi/pi-coding-agent`), and **PiG** (Pi-in-Go, [pi-in-go.dev](https://pi-in-go.dev)). Pi and OMP each have their own native entry point — `pi.extensions` → `index.ts` (Pi's `@earendil-works/*`), `omp.extensions` → `index.omp.ts` (OMP's `@oh-my-pi/*`) — over a shared host-agnostic core, so neither build pulls in the other host's packages. PiG is a Go port of Pi that runs Pi's TypeScript extensions unchanged in an embedded Node runtime and reads the same `pi` block, so it loads the Pi entry as-is. The `omp` manifest adds a typed settings schema; skills and the specialist `task` agents load by convention; the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
 
 ```bash
-./install.sh            # auto-detects pi or omp in PATH
+./install.sh            # auto-detects pi, then omp, then pig in PATH
 ./install.sh --pi       # force Pi  (installs pi-subagents + optional ast-grep structural search)
 ./install.sh --pi --no-subagents  # minimal Pi install; use /xp lite because swarm dispatch is unavailable
 ./install.sh --omp      # force OMP (copies agents/*.md to ~/.omp/agent/agents)
+./install.sh --pig      # force PiG (same flow as Pi, via the `pig` binary)
 ```
 
 Or install the npm package per host:
@@ -37,6 +38,7 @@ Or install the npm package per host:
 ```bash
 pi install npm:@xaccefy/pi-xpi     # Pi
 omp install npm:@xaccefy/pi-xpi    # OMP
+pig install npm:@xaccefy/pi-xpi    # PiG
 ```
 
 ## Quick start
