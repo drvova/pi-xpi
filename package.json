@@ -1,7 +1,7 @@
 {
   "name": "@xaccefy/pi-xpi",
   "version": "0.9.4",
-  "description": "XPI — offensive security tools for Pi Agent. Casefile tracking, web search, library docs, exploit technique search, and todo tracking.",
+  "description": "XPI — offensive security tools for Pi Agent. Casefile tracking with enforced gates, proof-carrying attestations, structural code search, and todo tracking.",
   "keywords": [
     "pi-package",
     "pi-extension",
@@ -10,8 +10,7 @@
     "bug-bounty",
     "pentest",
     "ctf",
-    "exploit",
-    "web-search"
+    "exploit"
   ],
   "type": "module",
   "license": "MIT",
@@ -32,23 +31,25 @@
   },
   "files": [
     "plugin.json",
+    ".omp-plugin/",
     "agents/",
     "skills/",
     "schemas/",
     "docs/",
     "packages/pi-casefile/src/",
     "packages/pi-casefile/skills/",
-    "packages/pi-webxp/src/",
-    "packages/pi-xtodo/index.ts",
+    "packages/pi-casefile/bin/",
+    "packages/pi-xtodo/pi-xtodo.ts",
+    "packages/pi-xtodo/pi-xtodo.omp.ts",
+    "packages/pi-xtodo/extension.ts",
     "install.sh",
     "README.md",
     "LICENSE"
   ],
   "pi": {
     "extensions": [
-      "./packages/pi-casefile/src/index.ts",
-      "./packages/pi-webxp/src/index.ts",
-      "./packages/pi-xtodo/index.ts"
+      "./packages/pi-casefile/src/pi-casefile.ts",
+      "./packages/pi-xtodo/pi-xtodo.ts"
     ],
     "skills": [
       "./skills"
@@ -59,10 +60,44 @@
       ]
     }
   },
+  "omp": {
+    "description": "Offensive security toolkit: casefile ledger with honest-PoC gates, proof-carrying attestations, exploit chains, coverage matrix, and todos. Skills (cyberwf, web-pentest, casefile) and the auditor/tracer/skeptic/chain task agents load by convention; web lookup and exploit_search are host-provided.",
+    "extensions": [
+      "./packages/pi-casefile/src/pi-casefile.omp.ts",
+      "./packages/pi-xtodo/pi-xtodo.omp.ts"
+    ],
+    "settings": {
+      "xpMode": {
+        "type": "enum",
+        "values": [
+          "off",
+          "lite",
+          "swarm",
+          "on"
+        ],
+        "env": "PI_XP_MODE",
+        "description": "Casefile XP (offensive) mode override: swarm (bounded multi-agent pipeline), lite (single-agent), or off. Leave unset to control it per session with the /xp command; a value here overrides /xp."
+      },
+      "casefilePath": {
+        "type": "string",
+        "env": "PI_CASEFILE_PATH",
+        "description": "Override the SQLite casefile ledger path (default: <workspace>/.pi/casefile.db)."
+      },
+      "attestKey": {
+        "type": "string",
+        "env": "PI_ATTEST_KEY",
+        "description": "Path to an Ed25519 PKCS#8 PEM private key for signing CaseAttest attestations (unsigned if unset)."
+      },
+      "attestKeyPem": {
+        "type": "string",
+        "secret": true,
+        "env": "PI_ATTEST_KEY_PEM",
+        "description": "Inline Ed25519 PEM private key for signing attestations; takes precedence over attestKey."
+      }
+    }
+  },
   "dependencies": {
     "@xaccefy/pi-shared": "0.9.4",
-    "open-websearch": "^2.1.11",
-    "tough-cookie": "^6.0.2",
     "undici": "^8.9.0"
   },
   "devDependencies": {
@@ -78,6 +113,9 @@
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*",
+    "@oh-my-pi/pi-ai": "*",
+    "@oh-my-pi/pi-coding-agent": "*",
+    "@oh-my-pi/pi-tui": "*",
     "typebox": "*"
   },
   "peerDependenciesMeta": {
@@ -89,18 +127,27 @@
     },
     "@earendil-works/pi-tui": {
       "optional": true
+    },
+    "@oh-my-pi/pi-ai": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-coding-agent": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-tui": {
+      "optional": true
     }
   },
   "scripts": {
     "test": "bun test --isolate",
     "bench": "bun bench/run.ts",
     "test:casefile": "bun test --isolate packages/pi-casefile",
-    "test:webxp": "bun test --isolate packages/pi-webxp",
     "test:xtodo": "bun test --isolate packages/pi-xtodo",
     "lint": "biome check .",
     "lint:fix": "biome check . --write",
     "format": "biome format . --write",
     "typecheck": "tsc --noEmit --project tsconfig.json",
+    "typecheck:omp": "tsc --noEmit --project tsconfig.omp.json",
     "version:patch": "node scripts/bump-version.js patch && bun install --lockfile-only",
     "version:minor": "node scripts/bump-version.js minor && bun install --lockfile-only",
     "version:major": "node scripts/bump-version.js major && bun install --lockfile-only",

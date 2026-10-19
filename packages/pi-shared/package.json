@@ -26,6 +26,7 @@
     "src/index.ts",
     "src/cache.ts",
     "src/ip-safety.ts",
+    "src/omp-tool.ts",
     "README.md",
     "LICENSE"
   ],

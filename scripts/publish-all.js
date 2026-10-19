@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const packageDirs = ["pi-shared", "pi-casefile", "pi-webxp", "pi-xtodo"].map((name) =>
+const packageDirs = ["pi-shared", "pi-casefile", "pi-xtodo"].map((name) =>
   join(root, "packages", name),
 );
 export const publishDirs = [...packageDirs, root];

@@ -1,17 +1,24 @@
 /**
  * Casefile — offensive security case tracker for Pi.
  *
- * Tools: CaseAdd, CaseUpdate, PromoteFinding, ConfirmFinding, EvidenceAdd, CoverageAdd, CoverageReport, ChainSuggest, CaseGet, CaseList, CaseSearch, CaseLink, CaseUnlink, CaseContext, PipelineSubmit, ScratchpadInit, ScratchpadResume, ScratchpadCheckpoint, ScratchpadWrite, ScratchpadRead, ScratchpadPhaseDone, ScratchpadClear
+ * Tools: CaseAdd, CaseUpdate, PromoteFinding, ConfirmFinding, CaseAttest, EvidenceAdd, CoverageAdd, CoverageReport, ChainSuggest, CaseGet, CaseList, CaseSearch, CaseLink, CaseUnlink, CaseContext, PipelineSubmit, ScratchpadInit, ScratchpadResume, ScratchpadCheckpoint, ScratchpadWrite, ScratchpadRead, ScratchpadPhaseDone, ScratchpadClear
  * Command: /casefile — interactive dashboard
  * Event: before_agent_start — injects cyber workflow once per session, refreshes the active case list per prompt
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import type { Text } from "@earendil-works/pi-tui";
+import type { OmpToolMetadata } from "@xaccefy/pi-shared";
 import { type TSchema, Type } from "typebox";
+import {
+  type Attestation,
+  buildAttestation,
+  signAttestation,
+  verifyAttestation,
+} from "./attestation.ts";
 import {
   CANARY_ASSESSMENT_VALUES,
   CONFIRM_DIFFERENTIAL_VALUES,
@@ -50,6 +57,7 @@ import {
   formatCase,
   formatCaseDetail,
   formatCases,
+  getAttestationPath,
   getCaseById,
   getCasefilePath,
   LINK_KIND_VALUES,
@@ -91,6 +99,57 @@ import {
   STATIC_CYBER_WORKFLOW_LITE,
   STATIC_CYBER_WORKFLOW_OMP,
 } from "./workflow.ts";
+
+// ── Host-injected UI primitives (Pi vs OMP) ──────────────────────────
+//
+// The TUI values this extension renders with (`Text`, `matchesKey`,
+// `truncateToWidth`) are the one piece that differs between hosts: Pi exports
+// them from `@earendil-works/pi-tui`, OMP from `@oh-my-pi/pi-tui`. The per-host
+// entry points (`pi-casefile.ts` for Pi, `pi-casefile.omp.ts` for OMP) import them from
+// their own package and pass them in, so neither build depends on the other
+// host's packages. Everything else here is host-agnostic.
+export interface CasefileHost {
+  Text: typeof import("@earendil-works/pi-tui").Text;
+  matchesKey: typeof import("@earendil-works/pi-tui").matchesKey;
+  truncateToWidth: typeof import("@earendil-works/pi-tui").truncateToWidth;
+}
+
+/** Set once at the top of `casefileExtension`, before any renderer or dashboard runs. */
+let ui!: CasefileHost;
+
+// ── Attestation generator identity + signing key ─────────────────────
+
+/** `pi-casefile <version>`, read best-effort from the package manifest for the attestation's provenance line. */
+const GENERATOR = (() => {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(dirname(import.meta.dirname), "package.json"), "utf8"),
+    );
+    return `pi-casefile ${pkg.version ?? ""}`.trim();
+  } catch {
+    return "pi-casefile";
+  }
+})();
+
+/**
+ * The Ed25519 signing key for attestations, if the operator configured one:
+ * `PI_ATTEST_KEY_PEM` (inline PKCS#8 PEM) takes precedence over `PI_ATTEST_KEY`
+ * (a path to a PEM file). Absent → attestations are built unsigned (still
+ * integrity-checkable, just not authenticated to a researcher identity).
+ */
+function readAttestationKey(): string | undefined {
+  const inline = process.env.PI_ATTEST_KEY_PEM?.trim();
+  if (inline) return inline;
+  const path = process.env.PI_ATTEST_KEY?.trim();
+  if (!path) return undefined;
+  try {
+    return readFileSync(path, "utf8");
+  } catch (err) {
+    throw new Error(
+      `PI_ATTEST_KEY points at ${path} but it could not be read: ${(err as Error).message}`,
+    );
+  }
+}
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -501,7 +560,7 @@ function renderCaseResult(
 /** One-line tool call header, shared by every tool's renderCall. */
 function callLine(theme: Theme, name: string, detail?: string): Text {
   const title = theme.fg("toolTitle", theme.bold(detail !== undefined ? `${name} ` : name));
-  return new Text(title + (detail ? theme.fg("dim", detail) : ""), 0, 0);
+  return new ui.Text(title + (detail ? theme.fg("dim", detail) : ""), 0, 0);
 }
 
 /** CaseRecord[] page summary, shared by CaseList / CaseSearch renderResult. */
@@ -518,7 +577,7 @@ function renderCasePage(
   if (expanded && cases.length > 0) {
     line += `\n${cases.map((c) => `  ${renderOneLine(c, theme)}`).join("\n")}`;
   }
-  return new Text(line, 0, 0);
+  return new ui.Text(line, 0, 0);
 }
 
 /** Filtered case query, shared by CaseList / CaseSearch execute. */
@@ -563,7 +622,7 @@ class CasefileDashboard {
   }
 
   handleInput(data: string): void {
-    if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
+    if (ui.matchesKey(data, "escape") || ui.matchesKey(data, "ctrl+c")) {
       this.onClose();
     }
   }
@@ -590,7 +649,7 @@ class CasefileDashboard {
       for (const r of this.records) {
         const prefixWidth = 2 + r.id.length + 1;
         lines.push(
-          `  ${th.fg("dim", r.id)} ${truncateToWidth(renderOneLine(r, th), Math.max(0, width - prefixWidth))}`,
+          `  ${th.fg("dim", r.id)} ${ui.truncateToWidth(renderOneLine(r, th), Math.max(0, width - prefixWidth))}`,
         );
       }
     }
@@ -791,7 +850,8 @@ export function parseXpModeArg(args: string, current: XpMode): XpMode {
 
 // ── Main extension ────────────────────────────────────────────────────
 
-export default function casefileExtension(pi: ExtensionAPI) {
+export function casefileExtension(pi: ExtensionAPI, host: CasefileHost) {
+  ui = host;
   // Process role is immutable for this extension instance. A worker may spawn
   // shells, but unsetting PI_SUBAGENT_CHILD in a child shell cannot upgrade the
   // already-loaded extension or reveal a tool that was omitted at startup.
@@ -808,7 +868,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   // ── Diagnostic Error Handler ──
   const registerCaseTool = <TParams extends TSchema, TDetails = unknown, TState = unknown>(
-    spec: ToolDefinition<TParams, TDetails, TState>,
+    spec: ToolDefinition<TParams, TDetails, TState> & OmpToolMetadata,
   ) => {
     const origExecute = spec.execute;
     pi.registerTool({
@@ -838,6 +898,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CaseAdd",
+    approval: "write",
     label: "Add Case",
     description:
       "Open a new case in the security ledger. Track security hypotheses, evidence points, confirmed vulnerabilities, blockers, and exploit chain steps during bug bounties, CTFs, and security audits.",
@@ -884,7 +945,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
       if (expanded && details?.record) {
         line += `\n${theme.fg("dim", `  ${details.record.id} → ${details.record.nextStep ?? "no next step"}`)}`;
       }
-      return new Text(line, 0, 0);
+      return new ui.Text(line, 0, 0);
     },
   });
 
@@ -892,6 +953,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CaseUpdate",
+    approval: "write",
     label: "Update Case",
     description:
       "Update an existing case. Change status, add evidence, update confidence, set severity, record next steps.",
@@ -939,7 +1001,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
               : `  ${details.record.id} [${details.record.status}/${details.record.confidence}]`,
           );
       }
-      return new Text(line, 0, 0);
+      return new ui.Text(line, 0, 0);
     },
   });
 
@@ -947,6 +1009,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "EvidenceAdd",
+    approval: "write",
     label: "Add Evidence Item",
     description:
       "Record a role-typed, artifact-backed evidence item on a case. Artifact reads are restricted to regular, non-symlink files inside the workspace; bytes are copied durably and stored as basename + SHA-256. refutation items justify a kill; cleanup items track engagement cleanup before REPORT.",
@@ -989,12 +1052,12 @@ export default function casefileExtension(pi: ExtensionAPI) {
     renderResult(result, _opts, theme) {
       const details = result.details as { item?: EvidenceItem } | undefined;
       if (!details?.item) {
-        return new Text(theme.fg("error", "✗ EvidenceAdd failed"), 0, 0);
+        return new ui.Text(theme.fg("error", "✗ EvidenceAdd failed"), 0, 0);
       }
-      return new Text(
+      return new ui.Text(
         theme.fg("success", "✓ ") +
           theme.fg("dim", `[${details.item.role}] `) +
-          truncateToWidth(details.item.summary, 60),
+          ui.truncateToWidth(details.item.summary, 60),
         0,
         0,
       );
@@ -1041,6 +1104,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CoverageAdd",
+    approval: "write",
     label: "Record Coverage",
     description:
       "Record what you tested so it is not re-tested. Call AFTER finishing a CLASS of issue, for BOTH outcomes (found or clean — a clean result is just as important to record). scope=wide: the verdict is a property of the whole deployment, recorded once and applied to every later asset (do NOT re-test per asset); scope=local: specific to this one asset. The cell's existence marks that class tested for that asset.",
@@ -1085,12 +1149,12 @@ export default function casefileExtension(pi: ExtensionAPI) {
     renderResult(result, _opts, theme) {
       const details = result.details as { item?: CoverageItem } | undefined;
       if (!details?.item) {
-        return new Text(theme.fg("error", "✗ CoverageAdd failed"), 0, 0);
+        return new ui.Text(theme.fg("error", "✗ CoverageAdd failed"), 0, 0);
       }
-      return new Text(
+      return new ui.Text(
         theme.fg("success", "✓ ") +
           theme.fg("dim", `[${details.item.scope}] `) +
-          truncateToWidth(`${details.item.asset} × ${details.item.class}`, 50),
+          ui.truncateToWidth(`${details.item.asset} × ${details.item.class}`, 50),
         0,
         0,
       );
@@ -1108,6 +1172,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CoverageReport",
+    approval: "read",
     label: "Coverage Matrix",
     description:
       "Render the machine-checkable coverage matrix for a case: which (asset × attack-class) cells are tested, with wide-verdict propagation. Run before deciding HUNT coverage is done — the plateau stop (zero new classes testable) must be visible in the matrix, not asserted in prose.",
@@ -1149,7 +1214,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
     renderResult(result, _opts, theme) {
       const details = result.details as { summary?: { items?: CoverageItem[] } } | undefined;
       const n = details?.summary?.items?.length ?? 0;
-      return new Text(theme.fg("success", `✓ ${n} coverage cell(s)`), 0, 0);
+      return new ui.Text(theme.fg("success", `✓ ${n} coverage cell(s)`), 0, 0);
     },
   });
 
@@ -1158,6 +1223,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
   if (!startedAsSubagent)
     registerCaseTool({
       name: "PromoteFinding",
+      approval: "exec",
       label: "Run PoC Evidence",
       description:
         "Main-agent phase 1 of confirmation: run the same PoC twice against the case target and once against an operator-approved control_target, validate nonce-bound evidence.json with a response-body assertion, then have the harness execute one immutable HTTP request template against both target and control. control_path defaults to poc_path; if supplied, sha256 equality is enforced. The machine records a predicate differential, or a stronger canary differential when a reflection placeholder is requested and observed only on target; neither is automatically a vulnerability verdict. Exit 0 is necessary run integrity, never proof. Networked execution, controls, and private replay are operator-gated. Blind/OOB confirmation fails closed until source separation exists. Records a pending bundle for main-agent semantic review via ConfirmFinding. Worker/subagent processes are rejected.",
@@ -1432,9 +1498,9 @@ export default function casefileExtension(pi: ExtensionAPI) {
       renderResult(result, _opts, theme) {
         const details = result.details as { bundle?: { evidenceSha256?: string } } | undefined;
         if (!details?.bundle) {
-          return new Text(theme.fg("error", "✗ PromoteFinding failed"), 0, 0);
+          return new ui.Text(theme.fg("error", "✗ PromoteFinding failed"), 0, 0);
         }
-        return new Text(
+        return new ui.Text(
           theme.fg("success", "✓ ") +
             theme.fg("dim", "evidence bundle ") +
             theme.fg("muted", details.bundle.evidenceSha256?.slice(0, 12) ?? ""),
@@ -1452,6 +1518,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
   if (!startedAsSubagent)
     registerCaseTool({
       name: "ConfirmFinding",
+      approval: "exec",
       label: "Main-Agent Confirmation",
       description:
         "Phase 2 of confirmation, reserved for the main/coordinator agent: commit or refuse promotion after personally reviewing the machine bundle. On CONFIRMED, this tool performs a fresh harness-owned target/control replay; the verdict requires a target-only differential, a concrete re_execution_note and disconfirmation_attempt, a canary assessment, and the still-valid PromoteFinding bundle. The machine transcript is evidence, not the semantic vulnerability verdict. Worker/subagent processes are rejected. NOT_CONFIRMED records the review and keeps the case investigating.",
@@ -1539,7 +1606,7 @@ ${formatCaseDetail(record)}`,
 
       renderResult(result, _opts, theme) {
         const details = result.details as { promoted?: boolean } | undefined;
-        return new Text(
+        return new ui.Text(
           details?.promoted
             ? theme.fg("success", "✓ Promoted")
             : theme.fg("warning", "↷ Not confirmed"),
@@ -1549,10 +1616,119 @@ ${formatCaseDetail(record)}`,
       },
     });
 
+  // ── Tool: CaseAttest ──
+
+  registerCaseTool({
+    name: "CaseAttest",
+    approval: "write",
+    label: "Attest Finding",
+    description:
+      "Emit a proof-carrying attestation for a CONFIRMED case: a canonical, hash-chained manifest that binds the finding, its evidence hashes, the PoC script hash, and the phase-1/phase-2 differential replay verdicts into one tamper-evident file, optionally Ed25519-signed. A triager runs `xpi-verify <file>` to recompute the chain and check the signature WITHOUT trusting the researcher or re-running anything live. Main-agent-only. Rejected unless the case passed the full gate (CONFIRMED + target-only phase-2 replay). It certifies gate integrity and reproducible hashes — NOT that the target is still vulnerable at verification time.",
+    promptSnippet: "Emit a verifiable, signed attestation for a confirmed finding",
+    promptGuidelines: [
+      "Run only in the main agent, after ConfirmFinding has promoted the case to confirmed.",
+      "Set PI_ATTEST_KEY (PEM file path) or PI_ATTEST_KEY_PEM (inline) to sign; publish the public-key fingerprint (e.g. in security.txt) so triagers can pin it. Without a key the attestation is unsigned but still integrity-checkable.",
+      "Attach the written attestation.json to the report. The attestation proves the gate ran and produced a target-only differential — it is not a live re-test; do not describe it as one.",
+    ],
+    parameters: Type.Object(
+      {
+        id: Type.String({ description: "Case ID (must be confirmed)" }),
+        sign: Type.Optional(
+          Type.Boolean({
+            description:
+              "Sign the chain root when a key is configured (default true). No key → unsigned.",
+          }),
+        ),
+        include_coverage: Type.Optional(
+          Type.Boolean({
+            description:
+              "Commit the case's (asset × class) coverage matrix as a leaf (default true)",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+
+    async execute(_id, params, _signal, _onUpdate, _ctx) {
+      if (isSubagentProcess()) {
+        throw new Error(
+          "CaseAttest is reserved for the main/coordinator agent — the same gate that owns ConfirmFinding.",
+        );
+      }
+      const record = getCaseById(params.id as string);
+      if (!record) throw new Error(`Case not found: ${params.id}`);
+
+      let attestation: Attestation = buildAttestation(record, {
+        generator: GENERATOR,
+        includeCoverage: params.include_coverage !== false,
+      });
+
+      const wantSign = params.sign !== false;
+      const key = wantSign ? readAttestationKey() : undefined;
+      let signed = false;
+      let note = "";
+      if (wantSign && key) {
+        attestation = signAttestation(attestation, key);
+        signed = true;
+      } else if (wantSign) {
+        note =
+          " (UNSIGNED — set PI_ATTEST_KEY or PI_ATTEST_KEY_PEM to authenticate it to your researcher key)";
+      }
+
+      // Self-check: a written attestation must verify, or we never emit it.
+      const check = verifyAttestation(attestation);
+      if (!check.ok) {
+        throw new Error(
+          `Refusing to write an attestation that fails self-verification: ${check.errors.join("; ")}`,
+        );
+      }
+
+      const outPath = getAttestationPath(record);
+      mkdirSync(dirname(outPath), { recursive: true });
+      writeFileSync(outPath, `${JSON.stringify(attestation, null, 2)}\n`, "utf8");
+
+      const fingerprint = attestation.signature?.public_key_fingerprint;
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `Attestation written: ${outPath}${note}\n` +
+              `chain_root: ${attestation.chain_root}\n` +
+              `signed: ${signed}${fingerprint ? ` (key ${fingerprint.slice(0, 16)}…)` : ""}\n` +
+              `Verify with: xpi-verify ${outPath}`,
+          },
+        ],
+        details: {
+          path: outPath,
+          signed,
+          chainRoot: attestation.chain_root,
+          fingerprint,
+        },
+      };
+    },
+
+    renderCall(args, theme) {
+      return callLine(theme, "CaseAttest", (args.id as string) ?? "");
+    },
+
+    renderResult(result, _opts, theme) {
+      const details = result.details as { signed?: boolean } | undefined;
+      return new ui.Text(
+        details?.signed
+          ? theme.fg("success", "✓ Attested (signed)")
+          : theme.fg("warning", "✓ Attested (unsigned)"),
+        0,
+        0,
+      );
+    },
+  });
+
   // ── Tool: CaseGet ──
 
   registerCaseTool({
     name: "CaseGet",
+    approval: "read",
     label: "Get Case",
     description: "Get full details of a single case by ID.",
     promptSnippet: "Look up a specific case by ID",
@@ -1574,7 +1750,7 @@ ${formatCaseDetail(record)}`,
     },
 
     renderResult(result, _options, theme) {
-      return new Text(renderCaseResult(result, theme, "", ""), 0, 0);
+      return new ui.Text(renderCaseResult(result, theme, "", ""), 0, 0);
     },
   });
 
@@ -1582,6 +1758,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseList",
+    approval: "read",
     label: "List Cases",
     description:
       "List cases from the ledger with optional filters. Returns paginated results with total count.",
@@ -1612,6 +1789,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseSearch",
+    approval: "read",
     label: "Search Cases",
     description:
       "Full-text search across cases. Optionally restrict to a specific field. Returns paginated results with total count.",
@@ -1640,6 +1818,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseLink",
+    approval: "write",
     label: "Link Cases",
     description:
       "Bidirectionally link two cases. Use to build exploit chains. Optional `kind` records the relationship (duplicate | related | blocks | depends-on | caused-by | supersedes | mitigates | same-root-cause).",
@@ -1690,10 +1869,10 @@ ${formatCaseDetail(record)}`,
         | { source?: CaseRecord; target?: CaseRecord; changed?: boolean; kind?: string }
         | undefined;
       if (!details?.source || !details?.target) {
-        return new Text("Linked", 0, 0);
+        return new ui.Text("Linked", 0, 0);
       }
       const kindLabel = details.kind ? ` [${details.kind}]` : "";
-      return new Text(
+      return new ui.Text(
         theme.fg(
           details.changed === false ? "warning" : "success",
           details.changed === false ? "↻ Linked " : "✓ Linked ",
@@ -1712,6 +1891,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseUnlink",
+    approval: "write",
     label: "Unlink Cases",
     description: "Remove a bidirectional link between two cases.",
     promptSnippet: "Remove a link between two cases",
@@ -1752,7 +1932,7 @@ ${formatCaseDetail(record)}`,
 
     renderResult(result, _options, theme) {
       const details = result.details as { changed?: boolean } | undefined;
-      return new Text(
+      return new ui.Text(
         theme.fg(
           details?.changed === false ? "warning" : "success",
           details?.changed === false ? "↻ Unlinked" : "✓ Unlinked",
@@ -1779,6 +1959,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ChainSuggest",
+    approval: "read",
     label: "Suggest Exploit Chains",
     description:
       "Scan non-terminal cases for exploitable chains (credential+endpoint→ATO, open-redirect+OAuth→token theft, XSS+state-changing→CSRF bypass, IDOR+user-data→mass leak, SSTI→RCE, race+payment→financial, info-disclosure+SSRF). Returns ranked candidates with confidence and a suggested link kind — the agent decides whether to CaseLink them or open an escalation case. Catches chain combinations the model may have missed.",
@@ -1820,7 +2001,7 @@ ${formatCaseDetail(record)}`,
     renderResult(result, _opts, theme) {
       const details = result.details as { suggestions?: { length: number } } | undefined;
       const n = details?.suggestions?.length ?? 0;
-      return new Text(theme.fg(n ? "accent" : "dim", `${n} chain candidate(s)`), 0, 0);
+      return new ui.Text(theme.fg(n ? "accent" : "dim", `${n} chain candidate(s)`), 0, 0);
     },
   });
 
@@ -1828,6 +2009,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseContext",
+    approval: "write",
     label: "Generate Case Context",
     description:
       "Generate the case context bundle for a confirmed or reported case under the casefile report directory (next to the casefile DB): full evidence, PoC verification log, disconfirmation attempt, links, and timeline, plus the target report path. The main agent turns this context into the final polished H1-style report. Hypothesis/investigating/blocked/killed cases are rejected — promote to confirmed first.",
@@ -1857,7 +2039,7 @@ ${formatCaseDetail(record)}`,
 
     renderResult(result, _options, theme) {
       const details = result.details as { contextPath?: string } | undefined;
-      return new Text(
+      return new ui.Text(
         theme.fg("success", "✓ Context ") + theme.fg("muted", details?.contextPath ?? "written"),
         0,
         0,
@@ -1889,6 +2071,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "PipelineSubmit",
+    approval: "write",
     label: "Submit Stage Output",
     description:
       "Submit a pipeline stage's output (hunt, trace, skeptic, validate, chain, report) through the validation gate. Validates required fields against the stage spec (mirrors schemas/*.json), applies the deterministic pre-filter (test-path and file-existence filters on hunt findings, trivial dedup by file+class+line), and counts repair attempts (max 2, then rejected). A stage cannot advance on an invalid output — submit fixed output until accepted.",
@@ -1943,16 +2126,16 @@ ${formatCaseDetail(record)}`,
     renderResult(result, _opts, theme) {
       const details = result.details as { verdict?: string; repair_attempt?: number } | undefined;
       if (details?.verdict === "accepted") {
-        return new Text(theme.fg("success", "✓ PipelineSubmit accepted"), 0, 0);
+        return new ui.Text(theme.fg("success", "✓ PipelineSubmit accepted"), 0, 0);
       }
       if (details?.verdict === "repair") {
-        return new Text(
+        return new ui.Text(
           theme.fg("warning", `↷ PipelineSubmit repair ${details.repair_attempt}/2`),
           0,
           0,
         );
       }
-      return new Text(theme.fg("error", "✗ PipelineSubmit rejected"), 0, 0);
+      return new ui.Text(theme.fg("error", "✗ PipelineSubmit rejected"), 0, 0);
     },
   });
 
@@ -1960,6 +2143,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadInit",
+    approval: "write",
     label: "Init Scratchpad",
     description:
       "Initialize a crash-recoverable artifact store for a pipeline run. Creates the directory structure and an initial state.json checkpoint. Idempotent — safe to call on resume without --fresh; returns the existing checkpoint if the run already exists.",
@@ -1990,7 +2174,7 @@ ${formatCaseDetail(record)}`,
 
     renderResult(result, _opts, theme) {
       const cp = (result.details as { checkpoint: { run_id: string } } | undefined)?.checkpoint;
-      return new Text(`${theme.fg("success", "✓ ")}ScratchpadInit ${cp?.run_id ?? ""}`, 0, 0);
+      return new ui.Text(`${theme.fg("success", "✓ ")}ScratchpadInit ${cp?.run_id ?? ""}`, 0, 0);
     },
   });
 
@@ -1998,6 +2182,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadResume",
+    approval: "read",
     label: "Resume Scratchpad",
     description:
       "Read the checkpoint and artifact listing for a pipeline run to decide where to resume. Returns the next phase to run (or null if done) and which phases already completed. Returns null if the run does not exist.",
@@ -2043,8 +2228,9 @@ ${formatCaseDetail(record)}`,
 
     renderResult(result, _opts, theme) {
       const resume = (result.details as { resume: ScratchpadResume | null } | undefined)?.resume;
-      if (!resume) return new Text(theme.fg("warning", "↷ ScratchpadResume — no run found"), 0, 0);
-      return new Text(
+      if (!resume)
+        return new ui.Text(theme.fg("warning", "↷ ScratchpadResume — no run found"), 0, 0);
+      return new ui.Text(
         theme.fg("success", "✓ ") +
           `ScratchpadResume ${resume.checkpoint.run_id} → next: ${resume.next_phase ?? "done"}`,
         0,
@@ -2057,6 +2243,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadCheckpoint",
+    approval: "write",
     label: "Checkpoint Phase",
     description:
       "Mark a pipeline phase as complete in the scratchpad state.json. Records the completion timestamp, key IDs, and an optional summary. Idempotent — re-checkpointing a phase overwrites its summary/IDs without duplicating the completed_phases entry.",
@@ -2094,7 +2281,7 @@ ${formatCaseDetail(record)}`,
       const cp = (
         result.details as { checkpoint: { run_id: string; completed_phases: string[] } } | undefined
       )?.checkpoint;
-      return new Text(
+      return new ui.Text(
         theme.fg("success", "✓ ") +
           `ScratchpadCheckpoint ${cp?.run_id ?? ""} — ${cp?.completed_phases.length ?? 0} phases done`,
         0,
@@ -2107,6 +2294,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadWrite",
+    approval: "write",
     label: "Write Artifact",
     description:
       "Write an intermediate artifact (recon map, trace output, verification log) to a phase's subdirectory in the scratchpad. Overwrites if the name exists. Artifact names are sanitized — path traversal is blocked.",
@@ -2145,7 +2333,7 @@ ${formatCaseDetail(record)}`,
 
     renderResult(result, _opts, theme) {
       const name = (result.details as { artifact_name?: string } | undefined)?.artifact_name;
-      return new Text(theme.fg("success", `✓ ScratchpadWrite ${name ?? ""}`), 0, 0);
+      return new ui.Text(theme.fg("success", `✓ ScratchpadWrite ${name ?? ""}`), 0, 0);
     },
   });
 
@@ -2153,6 +2341,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadRead",
+    approval: "read",
     label: "Read Artifact",
     description:
       "Read an artifact from a phase's subdirectory in the scratchpad. Returns null if the artifact is missing. Use to resume a phase from a prior run's intermediate output.",
@@ -2196,7 +2385,7 @@ ${formatCaseDetail(record)}`,
 
     renderResult(result, _opts, theme) {
       const found = (result.details as { found?: boolean } | undefined)?.found;
-      return new Text(
+      return new ui.Text(
         found
           ? theme.fg("success", "✓ ScratchpadRead")
           : theme.fg("warning", "↷ ScratchpadRead — not found"),
@@ -2210,6 +2399,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadPhaseDone",
+    approval: "write",
     label: "Phase Done?",
     description:
       "Check whether a phase has already been checkpointed in the scratchpad — for idempotent re-run. Returns true if the phase is complete; skip re-dispatching it on resume.",
@@ -2239,7 +2429,7 @@ ${formatCaseDetail(record)}`,
 
     renderResult(result, _opts, theme) {
       const done = (result.details as { done?: boolean } | undefined)?.done;
-      return new Text(
+      return new ui.Text(
         done
           ? theme.fg("success", "✓ ScratchpadPhaseDone — done")
           : theme.fg("warning", "↷ ScratchpadPhaseDone — not done"),
@@ -2253,6 +2443,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadClear",
+    approval: "write",
     label: "Clear Run",
     description:
       "Clear a single pipeline run's scratchpad directory. Used by --fresh for one run. Does not touch other runs. The run must be re-initialized with ScratchpadInit afterward.",
@@ -2281,7 +2472,7 @@ ${formatCaseDetail(record)}`,
     },
 
     renderResult(_result, _opts, theme) {
-      return new Text(theme.fg("success", "✓ ScratchpadClear"), 0, 0);
+      return new ui.Text(theme.fg("success", "✓ ScratchpadClear"), 0, 0);
     },
   });
 

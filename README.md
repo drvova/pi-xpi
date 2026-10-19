@@ -2,7 +2,7 @@
 
 # XPI
 
-**Security tooling for the Pi agent** — casefile tracking, web search, exploit-technique intelligence, code search, and todos.
+**Security tooling for the Pi agent** — casefile tracking, proof-carrying attestations, code search, and todos.
 
 [![npm version](https://img.shields.io/npm/v/@xaccefy/pi-xpi?style=flat-square&label=npm&color=cb3837)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
 [![npm downloads](https://img.shields.io/npm/dm/@xaccefy/pi-xpi?style=flat-square&label=downloads&color=4c9aff)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
@@ -12,23 +12,25 @@
 
 ## What it is
 
-XPI turns the Pi agent into a security researcher: a case ledger with enforced gates, real exploit-technique grounding, web lookup, fast code search, and a pipeline that keeps findings honest.
+XPI turns the Pi agent into a security researcher: a case ledger with enforced gates, exploit-technique grounding and web lookup (via the host's research tools), fast code search, and a pipeline that keeps findings honest.
 
 - **Casefile** — hypothesis → investigating → confirmed → reported, with gates at every step
 - **Machine-owned PoC gates** — zero exit is necessary but never proof: direct-response findings require nonce-bound body evidence plus a DNS-pinned, conclusive `target_only` replay against an operator-approved control; reflection-capable requests can add a harness-generated target-only canary; only the main agent may make the semantic decision and commit phase 2
 - **Exploit chains** — `ChainSuggest` surfaces combinations the model missed
 - **Coverage matrix** — machine-checkable "we tested everything" claims
+- **Proof-carrying attestations** — `CaseAttest` emits a canonical, hash-chained, Ed25519-signed manifest of a confirmed finding; a triager runs `xpi-verify` to recompute the chain and check the signature without trusting the researcher or re-testing live
 - **Code search** — structural AST search (ast-grep) for sinks and call chains, plus built-in grep/find for text
 
 ## Install
 
-Works on **Pi Agent** and its fork **OMP** (`@oh-my-pi/pi-coding-agent`). One manifest serves both: OMP reads the same `pi` extension field, the Agent Plugins `plugin.json` for skills, and the `task` tool spawns the specialist agents.
+Works on **Pi Agent**, its fork **OMP** (`@oh-my-pi/pi-coding-agent`), and **PiG** (Pi-in-Go, [pi-in-go.dev](https://pi-in-go.dev)). Pi and OMP each have their own native entry point — `pi.extensions` → a `<pkg>.ts` entry (Pi's `@earendil-works/*`), `omp.extensions` → a `<pkg>.omp.ts` entry (OMP's `@oh-my-pi/*`) — over a shared host-agnostic core, so neither build pulls in the other host's packages. PiG is a Go port of Pi that runs Pi's TypeScript extensions unchanged in an embedded Node runtime and reads the same `pi` block, so it loads the Pi entries as-is. The `omp` manifest adds a typed settings schema; skills and the specialist `task` agents load by convention; the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
 
 ```bash
-./install.sh            # auto-detects pi or omp in PATH
+./install.sh            # auto-detects pi, then omp, then pig in PATH
 ./install.sh --pi       # force Pi  (installs pi-subagents + optional ast-grep structural search)
 ./install.sh --pi --no-subagents  # minimal Pi install; use /xp lite because swarm dispatch is unavailable
 ./install.sh --omp      # force OMP (copies agents/*.md to ~/.omp/agent/agents)
+./install.sh --pig      # force PiG (same flow as Pi, via the `pig` binary)
 ```
 
 Or install the npm package per host:
@@ -36,9 +38,8 @@ Or install the npm package per host:
 ```bash
 pi install npm:@xaccefy/pi-xpi     # Pi
 omp install npm:@xaccefy/pi-xpi    # OMP
+pig install npm:@xaccefy/pi-xpi    # PiG
 ```
-
-Set `PREVIEW_IS_API_KEY` for `exploit_search` (see [docs/guide.md](docs/guide.md)).
 
 ## Quick start
 
@@ -58,7 +59,6 @@ Full tool reference, configuration, and pipeline docs: **[docs/guide.md](docs/gu
 |---------|-----|
 | Umbrella | [`@xaccefy/pi-xpi`](https://www.npmjs.com/package/@xaccefy/pi-xpi) |
 | Case ledger | [`@xaccefy/pi-casefile`](https://www.npmjs.com/package/@xaccefy/pi-casefile) |
-| Web lookup + exploit search | [`@xaccefy/pi-webxp`](https://www.npmjs.com/package/@xaccefy/pi-webxp) |
 | Todos | [`@xaccefy/pi-xtodo`](https://www.npmjs.com/package/@xaccefy/pi-xtodo) |
 
 ## Develop

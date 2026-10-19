@@ -193,7 +193,7 @@ beforeEach(async () => {
   // PI_SUBAGENT_CHILD=1 (the harness sets it when running inside pi-subagents);
   // without this, the whole XP-mode suite fails under subagent execution.
   delete process.env.PI_SUBAGENT_CHILD;
-  casefileExtension = (await import("../src/index.ts")).default;
+  casefileExtension = (await import("../src/pi-casefile.ts")).default;
 });
 
 afterEach(async () => {
@@ -219,6 +219,7 @@ describe("casefile extension", () => {
 
     expect([...pi.tools.keys()].sort()).toEqual([
       "CaseAdd",
+      "CaseAttest",
       "CaseContext",
       "CaseGet",
       "CaseLink",

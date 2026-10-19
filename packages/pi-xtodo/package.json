@@ -24,15 +24,25 @@
     "registry": "https://registry.npmjs.org/"
   },
   "files": [
-    "index.ts",
+    "pi-xtodo.ts",
+    "pi-xtodo.omp.ts",
+    "extension.ts",
     "README.md",
     "LICENSE"
   ],
-  "main": "index.ts",
+  "main": "pi-xtodo.ts",
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./pi-xtodo.ts"
     ]
+  },
+  "omp": {
+    "extensions": [
+      "./pi-xtodo.omp.ts"
+    ]
+  },
+  "dependencies": {
+    "@xaccefy/pi-shared": "0.9.4"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
@@ -42,6 +52,20 @@
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*",
+    "@oh-my-pi/pi-ai": "*",
+    "@oh-my-pi/pi-coding-agent": "*",
+    "@oh-my-pi/pi-tui": "*",
     "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@oh-my-pi/pi-ai": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-coding-agent": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-tui": {
+      "optional": true
+    }
   }
 }

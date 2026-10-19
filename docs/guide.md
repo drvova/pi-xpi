@@ -2,12 +2,16 @@
 
 Full reference: tools, configuration, pipeline, and development. The root [README](../README.md) is the short overview.
 
-## Hosts: Pi Agent and OMP
+## Hosts: Pi Agent, OMP, and PiG
 
-XPI runs on **Pi Agent** (`@earendil-works/pi-coding-agent`) and its fork **OMP** (`@oh-my-pi/pi-coding-agent`, binary `omp`). The same extension code, tools, ledger, and XP-mode workflow are used on both:
+XPI runs on **Pi Agent** (`@earendil-works/pi-coding-agent`), its fork **OMP** (`@oh-my-pi/pi-coding-agent`, binary `omp`), and **PiG** (Pi-in-Go, [pi-in-go.dev](https://pi-in-go.dev), binary `pig`). The same extension code, tools, ledger, and XP-mode workflow are used on all three:
 
-- **Extensions** — both hosts read the `pi` field in `package.json` (OMP also accepts an `omp` field; `plugin.json` is the Agent Plugins manifest OMP uses for skills).
-- **Skills** — `skills/cyberwf`, `skills/web-pentest`, `skills/casefile` load on both hosts (OMP via the Agent Plugins provider).
+- **Manifests + per-host entry points** — Pi reads the `pi` field, OMP reads the `omp` field (falling back to `pi`). Each field points at a **host-native entry file** with a package-distinct basename (so two extensions never collide on the name `index` under a host that keys by basename, e.g. PiG): `pi.extensions` → `<pkg>.ts` (e.g. `pi-casefile.ts`, imports Pi's `@earendil-works/*` TUI primitives), `omp.extensions` → `<pkg>.omp.ts` (e.g. `pi-casefile.omp.ts`, imports OMP's `@oh-my-pi/*`). Both entries are thin wrappers over a shared, host-agnostic `extension.ts` that receives the host's UI primitives as a parameter (`Text`, `matchesKey`, `truncateToWidth`, …); only those few values differ between forks. `typebox` schemas and type-only imports are shared (TypeBox is OMP's sanctioned extension-schema path). The `omp` manifest also carries a typed settings schema. The root `plugin.json` (Agent Plugins 1.0.0) is the portable manifest OMP's `agent-plugins` provider uses for skills and `mcp.json`.
+- **PiG (Pi-in-Go)** — PiG is a parity-bound Go port of Pi that runs Pi's TypeScript extensions unchanged in an embedded Node runtime, reading the **same `pi` block** (`extensions` + `skills`). XPI therefore loads on PiG through its **Pi entries** (`pi-casefile.ts`, `pi-xtodo.ts`) with no separate build — PiG does not read the `omp` block. (PiG keys an extension by its entry basename, so the entries are named per package rather than `index` to avoid a collision — verified live against `pig` 0.5.1 / Pi 1.3.0.) Install with `pig install npm:@xaccefy/pi-xpi` (or `./install.sh --pig`, or `pig install .` from a checkout). As on Pi, `/xp` / `/xp swarm` dispatch needs `pig install npm:pi-subagents`, and `/xp lite` works without it; structural search needs `pig install npm:pi-ast-grep` plus the `ast-grep` binary. PiG's config root is `~/.pig/` (`PIG_HOME`), and the `PI_*` environment variables (see [Configuration](#configuration)) are read the same way. PiG's additive `pig` manifest block (for `hooks`, `mcpServers`, `agentEnvironments`) is unused — XPI ships none of those.
+- **Settings (OMP)** — the `omp.settings` schema surfaces XPI's configuration in OMP with an environment-variable fallback: `xpMode` → `PI_XP_MODE`, `casefilePath` → `PI_CASEFILE_PATH`, `attestKey` → `PI_ATTEST_KEY`, and `attestKeyPem` (secret) → `PI_ATTEST_KEY_PEM`. `xpMode` has **no default** so it never overrides the `/xp` toggle unless you set it explicitly. On Pi the same configuration is read directly from the environment variables (see [Configuration](#configuration)).
+- **Native tool metadata** — every XPI tool carries OMP's native `ToolDefinition` fields alongside the Pi ones, so OMP gates it correctly instead of defaulting everything to the `exec` tier. Each tool declares an `approval` tier — `read` (lookups: CaseGet/List/Search, CoverageReport, ChainSuggest, ScratchpadRead/Resume), `write` (ledger mutations, EvidenceAdd, CaseAttest, scratchpad writes, PipelineSubmit), or `exec` (PromoteFinding and ConfirmFinding, which run the PoC and the harness replay). The metadata is attached with `withOmpMetadata` (in `@xaccefy/pi-shared`) so the Pi host simply ignores the extra keys; the Pi prompt surface (`promptSnippet`/`promptGuidelines`) is unchanged.
+- **Documentation composition** — a plugin contributes its instructional surface through OMP's providers, discovered by convention at the package root: `skills/` (`cyberwf`, `web-pentest`, `casefile` — each a `skills/<name>/SKILL.md` with a `name` + `description` the system prompt composes, body loaded on demand) and `agents/` (the `auditor`/`tracer`/`skeptic`/`chain` task agents). The mode-gated cyber workflow is composed per prompt by the extension's `before_agent_start` handler on both hosts. The `.omp-plugin/marketplace.json` catalog lets XPI be added as an OMP marketplace plugin.
+- **Skills** — `skills/cyberwf`, `skills/web-pentest`, `skills/casefile` load on both hosts (OMP via the Agent Plugins provider, which validates `name`/`description` and the directory-name agreement).
 - **Subagent dispatch** — `/xp lite` needs no dispatch dependency. `/xp` and `/xp swarm` use pi-subagents on Pi (`./install.sh --pi` installs it by default; `--no-subagents` skips it) or OMP's native `task` tool. The swarm workflow and the `cyberwf` skill describe both conventions; the extension injects the host-appropriate workflow automatically.
 - **Swarm agents** — `/xp` / `/xp swarm` delegates only to auditor, tracer, skeptic, and chain. Recon, validation/PoC writing, patching, reporting, and ConfirmFinding stay with the main agent.
 
@@ -17,30 +21,29 @@ XPI runs on **Pi Agent** (`@earendil-works/pi-coding-agent`) and its fork **OMP*
 
 | Variable | Package | Purpose |
 |----------|---------|---------|
-| `PREVIEW_IS_API_KEY` | webxp | Required for `exploit_search` ([preview.is](https://preview.is)) |
+| `PI_ATTEST_KEY` | casefile | Path to an Ed25519 PKCS#8 PEM private key for signing `CaseAttest` manifests (unsigned if unset) |
+| `PI_ATTEST_KEY_PEM` | casefile | Inline Ed25519 PEM (takes precedence over `PI_ATTEST_KEY`) |
 | `PI_XP_MODE` | casefile | `on` / `swarm` / `lite` / `off` — force casefile cyber-workflow injection (`on` is the default enabled mode: swarm; `lite` disables subagent dispatch) |
 | `PI_CASEFILE_PATH` | casefile | Override SQLite ledger path |
-| `PI_WEBSEARCH_PORT` | webxp | open-websearch daemon port (default `3210`) |
 
-```bash
-export PREVIEW_IS_API_KEY="rk_yourkeyhere"
-```
+The research tools below (`web_search`, `web_fetch`, `exploit_search`, `context7`, `deepwiki`, `http_request`) are provided by the host agent environment, not bundled by XPI; their configuration (API keys, endpoints) is managed by the host.
 
 ## Tools
 
 | Tool | Use for |
 |------|---------|
-| `exploit_search` | Attack techniques, primitives, bypasses (`PREVIEW_IS_API_KEY`) |
-| `web_search` | CVEs, advisories, documentation |
-| `web_fetch` | Page content from an HTTP(S) URL |
-| `context7` | Current library docs |
-| `deepwiki` | Q&A on a public GitHub repo |
+| `exploit_search` | Attack techniques, primitives, bypasses (host-provided) |
+| `web_search` | CVEs, advisories, documentation (host-provided) |
+| `web_fetch` | Page content from an HTTP(S) URL (host-provided) |
+| `context7` | Current library docs (host-provided) |
+| `deepwiki` | Q&A on a public GitHub repo (host-provided) |
 | `CaseAdd` / `CaseUpdate` / `PromoteFinding` / `ConfirmFinding` | Ledger + two-phase PoC gate. PromoteFinding picks a differential `mode`: **`inter_host`** (default) runs the PoC twice on target + once on an operator-approved control host for body-carried proof (file read, injection, info leak, reflection); **`intra_target`** proves access-control / business-logic classes (IDOR, auth bypass, privilege escalation, logic) with a same-host `baseline` request declared in the evidence (`verify.mode:"intra_target"`) — the harness sends attack + baseline to the target and requires the proof on the attack only, no control host. Both validate nonce-bound response-body evidence, then a DNS-pinned replay requiring a conclusive `target_only` differential. Reflection requests can add a post-PoC harness-generated canary that must appear only on target. Zero exit is run integrity, never proof. ConfirmFinding is main-agent-only, captures a fresh second replay, and binds it to the semantic verdict; worker/subagent gate calls are rejected. Private replay is operator-gated; blind/OOB claims fail closed without source separation |
 | `EvidenceAdd` | Role-typed, hashed evidence items (observation/reproduction/impact/refutation/cleanup); refutation justifies kills; reproduction auto-recorded by the PoC gate |
 | `CaseGet` / `CaseList` / `CaseSearch` | Browse cases |
 | `CaseLink` / `CaseUnlink` | Exploit chains |
 | `ChainSuggest` | Auto-detect exploitable chain combinations across cases (credential+endpoint→ATO, XSS+state-change→CSRF, SSTI→RCE, race+payment, …), ranked — verify before linking |
 | `CoverageAdd` / `CoverageReport` | Machine-checkable test coverage: record (asset × attack-class) cells with wide/local scope, linked to artifact-backed evidence items (`evidence_item_id`); unbacked cells render as ⚠ unbacked, and the plateau claim must match the matrix |
+| `CaseAttest` | **Proof-carrying attestation** — emit a canonical, hash-chained, optionally Ed25519-signed manifest binding the finding, evidence hashes, PoC hash, and the phase-1/phase-2 `target_only` differential into one tamper-evident file. A triager runs `xpi-verify` to recompute the chain and check the signature without trusting the researcher or re-testing live. Main-agent-only; refuses any case that did not pass the full gate. Certifies gate integrity, not current live vulnerability. See [docs/attestation.md](attestation.md) |
 | `CaseContext` | Case context bundle (complete record + artifacts) for the main agent's final report |
 | `PipelineSubmit` | Stage-output validation gate: schema check + pre-filter + repair budget — stage can't advance on invalid output |
 | `ScratchpadInit` / `Resume` / `Checkpoint` | Crash-recoverable artifact store for pipeline runs |
@@ -80,16 +83,41 @@ XPI uses [ast-grep](https://ast-grep.github.io) (`pi-ast-grep`) for **structural
 
 Structural search does **not** replace lexical search. Text patterns (error strings, config, saved HTTP responses, minified bundles, non-code files) still go through pi's built-in `grep`/`find`. Rule of thumb for the auditor/tracer/skeptic agents: **`ast_grep` for code shape, `grep`/`find` for raw text.** Neither uses `bash` — never shell out to `rg`/`grep`/`ast-grep` for code search.
 
+## Proof-carrying attestation
+
+The confirmation gate computes trust but, until now, never exported it: a
+shipped report collapsed the whole gate into prose a triager had to take on
+faith. `CaseAttest` closes that gap. After `ConfirmFinding` promotes a case, it
+serializes the gate's own outputs — the PoC hash, nonce-bound evidence hashes,
+and the phase-1/phase-2 `target_only` differential verdicts — into a canonical,
+hash-chained manifest, optionally Ed25519-signed, written next to the report.
+
+A triager, customer, or resuming agent runs the zero-dependency verifier:
+
+```bash
+xpi-verify <slug>-<case>.attestation.json                 # recompute chain + check signature
+xpi-verify att.json --key-fingerprint <sha256>            # pin the signer
+```
+
+It recomputes every leaf from the content, confirms the order-committing chain
+root, and verifies the signature — **without trusting the researcher and
+without re-running anything live**. The internal rule is "zero exit is never
+proof"; this is its external twin, "prose is never proof." An attestation
+certifies that the gate ran and produced a target-only differential at
+`confirmed_at` — it is an integrity proof, **not** a live re-test, and says
+nothing about whether the target is still vulnerable. Full format, chain
+construction, and key setup: **[docs/attestation.md](attestation.md)**.
+
 ## Structure
 
 ```
 pi-xpi/
 ├── agents/                  # auditor, tracer, skeptic, chain
 ├── packages/
-│   ├── pi-casefile          # ledger, poc-runner, workflow, scratchpad
-│   ├── pi-shared
-│   ├── pi-webxp
-│   └── pi-xtodo
+│   ├── pi-casefile          # extension.ts (shared) + pi-casefile.ts (Pi entry) + pi-casefile.omp.ts (OMP entry);
+│   │                        #   ledger, poc-runner, workflow, scratchpad, attestation (+ bin/xpi-verify)
+│   ├── pi-shared            # cache, ip-safety, omp-tool (host metadata)
+│   └── pi-xtodo             # extension.ts (shared) + pi-xtodo.ts (Pi entry) + pi-xtodo.omp.ts (OMP entry)
 ├── schemas/                 # stage-finding, stage-trace, stage-skeptic, stage-validation, stage-chain, stage-report
 ├── scripts/                 # bump-version
 ├── skills/                  # web-pentest, cyberwf (auto-loaded)
@@ -102,7 +130,16 @@ pi-xpi/
 ```bash
 bun install
 bun test --isolate
-bun run typecheck
+bun run typecheck        # Pi build; excludes the *.omp.ts entries
+```
+
+The default typecheck excludes the `*.omp.ts` entries so the base build needs
+only the Pi (`@earendil-works/*`) packages. To verify the OMP-native entries,
+install the OMP packages and run the opt-in config:
+
+```bash
+bun add -d @oh-my-pi/pi-coding-agent @oh-my-pi/pi-tui
+bun run typecheck:omp    # tsconfig.omp.json — checks the *.omp.ts entries against @oh-my-pi/*
 ```
 
 **Release (CI):** GitHub Actions → **Release** workflow → choose `patch` / `minor` / `major`.

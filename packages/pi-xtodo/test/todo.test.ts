@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, describe, it } from "node:test";
 import { MockExtensionAPI } from "../../../test-utils.ts";
-import { __resetState, default as registerTodo, TodoParamsSchema } from "../index.ts";
+import { __resetState, default as registerTodo, TodoParamsSchema } from "../pi-xtodo.ts";
 
 const TEST_XTODO_DIR = mkdtempSync(join(tmpdir(), "pi-xtodo-test-"));
 process.env.PI_XTODO_DIR = TEST_XTODO_DIR;

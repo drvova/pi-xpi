@@ -15,9 +15,26 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { DynamicBorder, type ExtensionAPI, keyText } from "@earendil-works/pi-coding-agent";
-import { Container, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { withOmpMetadata } from "@xaccefy/pi-shared";
 import { Type } from "typebox";
+
+// Host-injected TUI / component values (Pi vs OMP). The per-host entry points
+// (`pi-xtodo.ts` for Pi, `pi-xtodo.omp.ts` for OMP) import these from their own
+// package and pass them in, so neither build pulls in the other host's
+// packages. Everything else in this module is host-agnostic.
+export interface XtodoHost {
+  Text: typeof import("@earendil-works/pi-tui").Text;
+  Container: typeof import("@earendil-works/pi-tui").Container;
+  truncateToWidth: typeof import("@earendil-works/pi-tui").truncateToWidth;
+  /** Decorative widget border. Optional: hosts that do not expose it render the widget without a border. */
+  DynamicBorder?: typeof import("@earendil-works/pi-coding-agent").DynamicBorder;
+  /** Keybinding-hint helper. Optional: hosts without it fall back to a static hint. */
+  keyText?: typeof import("@earendil-works/pi-coding-agent").keyText;
+}
+
+/** Set once at the top of `registerTodo`, before any widget or renderer runs. */
+let ui!: XtodoHost;
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -486,10 +503,11 @@ async function showTodosOverlay(ctx: any, tasks: Task[]): Promise<void> {
     await ctx.ui.custom(
       // biome-ignore lint/suspicious/noExplicitAny: host-provided values
       (_tui: any, theme: any, _kb: any, done: (v: null) => void) => {
-        const container = new Container();
-        container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+        const container = new ui.Container();
+        if (ui.DynamicBorder)
+          container.addChild(new ui.DynamicBorder((s: string) => theme.fg("accent", s)));
         container.addChild(
-          new Text(
+          new ui.Text(
             theme.fg("accent", theme.bold("Todo")) +
               theme.fg("dim", ` — ${active.length} active · ${completed.length} completed`),
             1,
@@ -497,12 +515,13 @@ async function showTodosOverlay(ctx: any, tasks: Task[]): Promise<void> {
           ),
         );
         if (ordered.length === 0) {
-          container.addChild(new Text(theme.fg("dim", "No tasks"), 1, 0));
+          container.addChild(new ui.Text(theme.fg("dim", "No tasks"), 1, 0));
         } else {
-          for (const t of ordered) container.addChild(new Text(taskLine(t, theme), 1, 0));
+          for (const t of ordered) container.addChild(new ui.Text(taskLine(t, theme), 1, 0));
         }
-        container.addChild(new Text(theme.fg("dim", "esc/q/enter to close"), 1, 0));
-        container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+        container.addChild(new ui.Text(theme.fg("dim", "esc/q/enter to close"), 1, 0));
+        if (ui.DynamicBorder)
+          container.addChild(new ui.DynamicBorder((s: string) => theme.fg("accent", s)));
         return {
           render: (w: number) => container.render(w),
           invalidate: () => container.invalidate(),
@@ -590,7 +609,7 @@ function formatWidgetTask(t: Task, theme: any, showId: boolean): string {
 function renderWidgetLines(theme: any, width: number): string[] {
   const all = widgetTasks();
   if (all.length === 0) return [];
-  const truncate = (line: string): string => truncateToWidth(line, width);
+  const truncate = (line: string): string => ui.truncateToWidth(line, width);
   const completedCount = all.filter((t) => t.status === "completed").length;
   const hasActive = all.some((t) => t.status === "in_progress" || t.status === "pending");
   // Show per-row ids only when a blockedBy reference needs resolving.
@@ -691,54 +710,60 @@ function refreshWidget(ctx: any, sessionId?: string): void {
 // ---------------------------------------------------------------------------
 // Tool Registration
 // ---------------------------------------------------------------------------
-export default function registerTodo(pi: ExtensionAPI) {
-  pi.registerTool({
-    name: TOOL_NAME,
-    label: TOOL_LABEL,
-    description: "Manage a task list for tracking multi-step progress.",
-    parameters: TodoParamsSchema,
-    execute: async (_tid, params: any, _extra: any, _enable: any, ctx: any) => {
-      const sessionId = sid(ctx);
-      const action = params.action as TaskAction;
-      const state = getSessionState(sessionId);
-      const result = applyMutation(state, action, params);
-      if (result.error) throw new Error(result.error);
-      setSessionState(sessionId, result.state);
-      saveState(sessionId, result.state);
-      refreshWidget(ctx, sessionId);
-      return {
-        content: [{ type: "text", text: result.text }],
-        details: {
-          action,
-          params,
-          tasks: result.state.tasks,
-          nextId: result.state.nextId,
-        } satisfies TaskDetails,
-      };
-    },
-    renderResult: (result: any, options: any, theme: any, context: any) => {
-      const d = result.details as TaskDetails | undefined;
-      const text: string = result.content?.[0]?.text ?? "";
-      if (context?.isError) {
-        return new Text(`${theme.fg("error", "✗")} ${theme.fg("error", text)}`, 0, 0);
-      }
-      const glyph = d ? ACTION_GLYPH[d.action] : "•";
-      const lines = text.split("\n");
-      if (lines.length === 1 || options?.expanded) {
-        return new Text(`${theme.fg("toolTitle", glyph)} ${text}`, 0, 0);
-      }
-      const summary = d?.action === "list" ? `${lines.length} tasks` : lines[0];
-      const key = keyText("app.tools.expand");
-      const hint = key
-        ? `${theme.fg("dim", key)}${theme.fg("muted", " to expand")}`
-        : theme.fg("dim", "expand for full output");
-      return new Text(
-        `${theme.fg("toolTitle", glyph)} ${summary} (+${lines.length - 1} lines, ${hint})`,
-        0,
-        0,
-      );
-    },
-  });
+export function registerTodo(pi: ExtensionAPI, host: XtodoHost) {
+  ui = host;
+  pi.registerTool(
+    withOmpMetadata(
+      {
+        name: TOOL_NAME,
+        label: TOOL_LABEL,
+        description: "Manage a task list for tracking multi-step progress.",
+        parameters: TodoParamsSchema,
+        execute: async (_tid, params: any, _extra: any, _enable: any, ctx: any) => {
+          const sessionId = sid(ctx);
+          const action = params.action as TaskAction;
+          const state = getSessionState(sessionId);
+          const result = applyMutation(state, action, params);
+          if (result.error) throw new Error(result.error);
+          setSessionState(sessionId, result.state);
+          saveState(sessionId, result.state);
+          refreshWidget(ctx, sessionId);
+          return {
+            content: [{ type: "text", text: result.text }],
+            details: {
+              action,
+              params,
+              tasks: result.state.tasks,
+              nextId: result.state.nextId,
+            } satisfies TaskDetails,
+          };
+        },
+        renderResult: (result: any, options: any, theme: any, context: any) => {
+          const d = result.details as TaskDetails | undefined;
+          const text: string = result.content?.[0]?.text ?? "";
+          if (context?.isError) {
+            return new ui.Text(`${theme.fg("error", "✗")} ${theme.fg("error", text)}`, 0, 0);
+          }
+          const glyph = d ? ACTION_GLYPH[d.action] : "•";
+          const lines = text.split("\n");
+          if (lines.length === 1 || options?.expanded) {
+            return new ui.Text(`${theme.fg("toolTitle", glyph)} ${text}`, 0, 0);
+          }
+          const summary = d?.action === "list" ? `${lines.length} tasks` : lines[0];
+          const key = ui.keyText?.("app.tools.expand");
+          const hint = key
+            ? `${theme.fg("dim", key)}${theme.fg("muted", " to expand")}`
+            : theme.fg("dim", "expand for full output");
+          return new ui.Text(
+            `${theme.fg("toolTitle", glyph)} ${summary} (+${lines.length - 1} lines, ${hint})`,
+            0,
+            0,
+          );
+        },
+      },
+      { approval: "write" },
+    ),
+  );
 
   pi.registerCommand(COMMAND_NAME, {
     description: "Show todo list overlay",

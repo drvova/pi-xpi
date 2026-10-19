@@ -31,7 +31,10 @@
     "registry": "https://registry.npmjs.org/"
   },
   "files": [
-    "src/index.ts",
+    "src/pi-casefile.ts",
+    "src/pi-casefile.omp.ts",
+    "src/extension.ts",
+    "src/attestation.ts",
     "src/evidence.ts",
     "src/harness-verify.ts",
     "src/safe-state.ts",
@@ -43,21 +46,30 @@
     "src/pipeline-submit.ts",
     "src/scratchpad.ts",
     "src/sqlite-compat/index.ts",
+    "bin/xpi-verify.ts",
     "skills",
     "README.md",
     "LICENSE"
   ],
-  "main": "src/index.ts",
+  "main": "src/pi-casefile.ts",
+  "bin": {
+    "xpi-verify": "bin/xpi-verify.ts"
+  },
   "dependencies": {
     "@xaccefy/pi-shared": "0.9.4",
     "undici": "^8.9.0"
   },
   "pi": {
     "extensions": [
-      "./src/index.ts"
+      "./src/pi-casefile.ts"
     ],
     "skills": [
       "./skills"
+    ]
+  },
+  "omp": {
+    "extensions": [
+      "./src/pi-casefile.omp.ts"
     ]
   },
   "devDependencies": {
@@ -68,6 +80,20 @@
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*",
+    "@oh-my-pi/pi-ai": "*",
+    "@oh-my-pi/pi-coding-agent": "*",
+    "@oh-my-pi/pi-tui": "*",
     "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@oh-my-pi/pi-ai": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-coding-agent": {
+      "optional": true
+    },
+    "@oh-my-pi/pi-tui": {
+      "optional": true
+    }
   }
 }

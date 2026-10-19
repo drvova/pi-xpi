@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Install a source checkout of XPI on Pi Agent or its OMP fork.
+# Install a source checkout of XPI on Pi Agent, its OMP fork, or PiG (Pi-in-Go).
 #
-#   ./install.sh            # install on whichever host is in PATH (pi preferred, else omp)
+#   ./install.sh            # install on whichever host is in PATH (pi, then omp, then pig)
 #   ./install.sh --omp      # force the OMP host (needs `omp` in PATH)
 #   ./install.sh --pi       # force the Pi host (needs `pi` in PATH)
+#   ./install.sh --pig      # force the PiG host (needs `pig` in PATH)
 #   ./install.sh --pi --no-subagents  # skip pi-subagents; use /xp lite on Pi
 #
-# Pi:  pi install <dir> + pi-subagents + optional pi-ast-grep (structural search)
-# OMP: omp install <dir>  (extensions + skills via the Agent Plugins manifest);
-#      specialist agents are copied to ~/.omp/agent/agents so the `task` tool can
-#      spawn auditor/tracer/skeptic/chain by name for /xp or /xp swarm.
+# Pi / PiG: <bin> install <dir> + pi-subagents + optional pi-ast-grep (structural
+#      search). PiG (https://pi-in-go.dev) is a Go port of Pi that runs Pi's
+#      TypeScript extensions unchanged in an embedded Node runtime and reads the
+#      same `pi` manifest block, so XPI loads from its Pi entry (index.ts) with
+#      no separate build; only the binary name differs (`pig` vs `pi`).
+# OMP: omp install <dir>  (reads the first-class `omp` plugin manifest in
+#      package.json — extensions + settings — with skills via the Agent Plugins
+#      manifest); specialist agents are copied to ~/.omp/agent/agents so the
+#      `task` tool can spawn auditor/tracer/skeptic/chain by name for /xp or
+#      /xp swarm. XPI can also be added as an OMP marketplace plugin
+#      (.omp-plugin/marketplace.json).
 set -euo pipefail
 
 if [[ -n "${PI_XPI_INSTALLING:-}" ]]; then exit 0; fi
@@ -23,6 +31,7 @@ for arg in "$@"; do
   case "$arg" in
     --pi) HOST="pi" ;;
     --omp) HOST="omp" ;;
+    --pig) HOST="pig" ;;
     --force) FORCE=1 ;;
     --subagents | --full) INSTALL_SUBAGENTS=1 ;;
     --no-subagents | --lite) INSTALL_SUBAGENTS="" ;;
@@ -30,11 +39,13 @@ for arg in "$@"; do
 done
 
 if [[ -z "$HOST" ]]; then
-  if command -v pi >/dev/null 2>&1; then HOST="pi"; elif command -v omp >/dev/null 2>&1; then HOST="omp"; fi
+  if command -v pi >/dev/null 2>&1; then HOST="pi"
+  elif command -v omp >/dev/null 2>&1; then HOST="omp"
+  elif command -v pig >/dev/null 2>&1; then HOST="pig"; fi
 fi
 if [[ -z "$HOST" ]]; then
-  echo "Neither pi nor omp found in PATH" >&2
-  echo "Install Pi Agent (pi) or its fork OMP (omp) first, then re-run this script." >&2
+  echo "None of pi, omp, or pig found in PATH" >&2
+  echo "Install Pi Agent (pi), its fork OMP (omp), or PiG (pig) first, then re-run this script." >&2
   exit 1
 fi
 
@@ -103,32 +114,28 @@ if [[ "$HOST" == "omp" ]]; then
   done
 
   echo
-  echo "Optional environment variables:"
-  echo "  export PREVIEW_IS_API_KEY=\"rk_yourkeyhere\"  # https://preview.is"
-  echo
   echo "XPI installed on OMP. Use /xp for the bounded swarm pipeline, or /xp lite for single-agent mode."
   echo "OMP ships its own grep/find — XPI's ast-grep structural search is Pi-only."
   exit 0
 fi
 
-PI_BIN="$(command -v pi)"
-"$PI_BIN" install "$ROOT_DIR"
+# Pi and PiG share this path: PiG loads the same Pi/TypeScript extension build
+# and reads the same `pi` manifest block, so only the binary name differs.
+AGENT_BIN="$(command -v "$HOST")"
+"$AGENT_BIN" install "$ROOT_DIR"
 
 if [[ -n "$INSTALL_SUBAGENTS" ]]; then
   # /xp and /xp swarm dispatch specialist agents through pi-subagents.
-  "$PI_BIN" install "npm:pi-subagents"
+  "$AGENT_BIN" install "npm:pi-subagents"
 else
   echo "Skipping pi-subagents install (--no-subagents requested)"
 fi
 
-# Optional structural-search upgrade (ast-grep). Pi's built-in grep/find remain
+# Optional structural-search upgrade (ast-grep). The built-in grep/find remain
 # for text search if this fails. The pi-ast-grep extension wraps the ast-grep
 # CLI, so the binary must be on PATH first.
 npm install -g @ast-grep/cli >/dev/null 2>&1 || echo "ast-grep CLI install skipped (install @ast-grep/cli or cargo install ast-grep manually)"
-"$PI_BIN" install "npm:pi-ast-grep" || echo "Optional npm:pi-ast-grep install skipped"
+"$AGENT_BIN" install "npm:pi-ast-grep" || echo "Optional npm:pi-ast-grep install skipped"
 
 echo
-echo "Optional environment variables:"
-echo '  export PREVIEW_IS_API_KEY="rk_yourkeyhere"  # https://preview.is'
-echo
-echo "XPI installed. Use /xp for the bounded swarm pipeline, or /xp lite for single-agent mode."
+echo "XPI installed on ${HOST}. Use /xp for the bounded swarm pipeline, or /xp lite for single-agent mode."
