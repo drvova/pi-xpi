@@ -17,6 +17,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { DynamicBorder, type ExtensionAPI, keyText } from "@earendil-works/pi-coding-agent";
 import { Container, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { withOmpMetadata } from "@xaccefy/pi-shared";
 import { Type } from "typebox";
 
 // ---------------------------------------------------------------------------
@@ -692,53 +693,58 @@ function refreshWidget(ctx: any, sessionId?: string): void {
 // Tool Registration
 // ---------------------------------------------------------------------------
 export default function registerTodo(pi: ExtensionAPI) {
-  pi.registerTool({
-    name: TOOL_NAME,
-    label: TOOL_LABEL,
-    description: "Manage a task list for tracking multi-step progress.",
-    parameters: TodoParamsSchema,
-    execute: async (_tid, params: any, _extra: any, _enable: any, ctx: any) => {
-      const sessionId = sid(ctx);
-      const action = params.action as TaskAction;
-      const state = getSessionState(sessionId);
-      const result = applyMutation(state, action, params);
-      if (result.error) throw new Error(result.error);
-      setSessionState(sessionId, result.state);
-      saveState(sessionId, result.state);
-      refreshWidget(ctx, sessionId);
-      return {
-        content: [{ type: "text", text: result.text }],
-        details: {
-          action,
-          params,
-          tasks: result.state.tasks,
-          nextId: result.state.nextId,
-        } satisfies TaskDetails,
-      };
-    },
-    renderResult: (result: any, options: any, theme: any, context: any) => {
-      const d = result.details as TaskDetails | undefined;
-      const text: string = result.content?.[0]?.text ?? "";
-      if (context?.isError) {
-        return new Text(`${theme.fg("error", "✗")} ${theme.fg("error", text)}`, 0, 0);
-      }
-      const glyph = d ? ACTION_GLYPH[d.action] : "•";
-      const lines = text.split("\n");
-      if (lines.length === 1 || options?.expanded) {
-        return new Text(`${theme.fg("toolTitle", glyph)} ${text}`, 0, 0);
-      }
-      const summary = d?.action === "list" ? `${lines.length} tasks` : lines[0];
-      const key = keyText("app.tools.expand");
-      const hint = key
-        ? `${theme.fg("dim", key)}${theme.fg("muted", " to expand")}`
-        : theme.fg("dim", "expand for full output");
-      return new Text(
-        `${theme.fg("toolTitle", glyph)} ${summary} (+${lines.length - 1} lines, ${hint})`,
-        0,
-        0,
-      );
-    },
-  });
+  pi.registerTool(
+    withOmpMetadata(
+      {
+        name: TOOL_NAME,
+        label: TOOL_LABEL,
+        description: "Manage a task list for tracking multi-step progress.",
+        parameters: TodoParamsSchema,
+        execute: async (_tid, params: any, _extra: any, _enable: any, ctx: any) => {
+          const sessionId = sid(ctx);
+          const action = params.action as TaskAction;
+          const state = getSessionState(sessionId);
+          const result = applyMutation(state, action, params);
+          if (result.error) throw new Error(result.error);
+          setSessionState(sessionId, result.state);
+          saveState(sessionId, result.state);
+          refreshWidget(ctx, sessionId);
+          return {
+            content: [{ type: "text", text: result.text }],
+            details: {
+              action,
+              params,
+              tasks: result.state.tasks,
+              nextId: result.state.nextId,
+            } satisfies TaskDetails,
+          };
+        },
+        renderResult: (result: any, options: any, theme: any, context: any) => {
+          const d = result.details as TaskDetails | undefined;
+          const text: string = result.content?.[0]?.text ?? "";
+          if (context?.isError) {
+            return new Text(`${theme.fg("error", "✗")} ${theme.fg("error", text)}`, 0, 0);
+          }
+          const glyph = d ? ACTION_GLYPH[d.action] : "•";
+          const lines = text.split("\n");
+          if (lines.length === 1 || options?.expanded) {
+            return new Text(`${theme.fg("toolTitle", glyph)} ${text}`, 0, 0);
+          }
+          const summary = d?.action === "list" ? `${lines.length} tasks` : lines[0];
+          const key = keyText("app.tools.expand");
+          const hint = key
+            ? `${theme.fg("dim", key)}${theme.fg("muted", " to expand")}`
+            : theme.fg("dim", "expand for full output");
+          return new Text(
+            `${theme.fg("toolTitle", glyph)} ${summary} (+${lines.length - 1} lines, ${hint})`,
+            0,
+            0,
+          );
+        },
+      },
+      { approval: "write" },
+    ),
+  );
 
   pi.registerCommand(COMMAND_NAME, {
     description: "Show todo list overlay",

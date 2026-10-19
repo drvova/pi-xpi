@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import type { OmpToolMetadata } from "@xaccefy/pi-shared";
 import { type TSchema, Type } from "typebox";
 import {
   type Attestation,
@@ -849,7 +850,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   // ── Diagnostic Error Handler ──
   const registerCaseTool = <TParams extends TSchema, TDetails = unknown, TState = unknown>(
-    spec: ToolDefinition<TParams, TDetails, TState>,
+    spec: ToolDefinition<TParams, TDetails, TState> & OmpToolMetadata,
   ) => {
     const origExecute = spec.execute;
     pi.registerTool({
@@ -879,6 +880,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CaseAdd",
+    approval: "write",
     label: "Add Case",
     description:
       "Open a new case in the security ledger. Track security hypotheses, evidence points, confirmed vulnerabilities, blockers, and exploit chain steps during bug bounties, CTFs, and security audits.",
@@ -933,6 +935,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CaseUpdate",
+    approval: "write",
     label: "Update Case",
     description:
       "Update an existing case. Change status, add evidence, update confidence, set severity, record next steps.",
@@ -988,6 +991,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "EvidenceAdd",
+    approval: "write",
     label: "Add Evidence Item",
     description:
       "Record a role-typed, artifact-backed evidence item on a case. Artifact reads are restricted to regular, non-symlink files inside the workspace; bytes are copied durably and stored as basename + SHA-256. refutation items justify a kill; cleanup items track engagement cleanup before REPORT.",
@@ -1082,6 +1086,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CoverageAdd",
+    approval: "write",
     label: "Record Coverage",
     description:
       "Record what you tested so it is not re-tested. Call AFTER finishing a CLASS of issue, for BOTH outcomes (found or clean — a clean result is just as important to record). scope=wide: the verdict is a property of the whole deployment, recorded once and applied to every later asset (do NOT re-test per asset); scope=local: specific to this one asset. The cell's existence marks that class tested for that asset.",
@@ -1149,6 +1154,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
 
   registerCaseTool({
     name: "CoverageReport",
+    approval: "read",
     label: "Coverage Matrix",
     description:
       "Render the machine-checkable coverage matrix for a case: which (asset × attack-class) cells are tested, with wide-verdict propagation. Run before deciding HUNT coverage is done — the plateau stop (zero new classes testable) must be visible in the matrix, not asserted in prose.",
@@ -1199,6 +1205,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
   if (!startedAsSubagent)
     registerCaseTool({
       name: "PromoteFinding",
+      approval: "exec",
       label: "Run PoC Evidence",
       description:
         "Main-agent phase 1 of confirmation: run the same PoC twice against the case target and once against an operator-approved control_target, validate nonce-bound evidence.json with a response-body assertion, then have the harness execute one immutable HTTP request template against both target and control. control_path defaults to poc_path; if supplied, sha256 equality is enforced. The machine records a predicate differential, or a stronger canary differential when a reflection placeholder is requested and observed only on target; neither is automatically a vulnerability verdict. Exit 0 is necessary run integrity, never proof. Networked execution, controls, and private replay are operator-gated. Blind/OOB confirmation fails closed until source separation exists. Records a pending bundle for main-agent semantic review via ConfirmFinding. Worker/subagent processes are rejected.",
@@ -1493,6 +1500,7 @@ export default function casefileExtension(pi: ExtensionAPI) {
   if (!startedAsSubagent)
     registerCaseTool({
       name: "ConfirmFinding",
+      approval: "exec",
       label: "Main-Agent Confirmation",
       description:
         "Phase 2 of confirmation, reserved for the main/coordinator agent: commit or refuse promotion after personally reviewing the machine bundle. On CONFIRMED, this tool performs a fresh harness-owned target/control replay; the verdict requires a target-only differential, a concrete re_execution_note and disconfirmation_attempt, a canary assessment, and the still-valid PromoteFinding bundle. The machine transcript is evidence, not the semantic vulnerability verdict. Worker/subagent processes are rejected. NOT_CONFIRMED records the review and keeps the case investigating.",
@@ -1594,6 +1602,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseAttest",
+    approval: "write",
     label: "Attest Finding",
     description:
       "Emit a proof-carrying attestation for a CONFIRMED case: a canonical, hash-chained manifest that binds the finding, its evidence hashes, the PoC script hash, and the phase-1/phase-2 differential replay verdicts into one tamper-evident file, optionally Ed25519-signed. A triager runs `xpi-verify <file>` to recompute the chain and check the signature WITHOUT trusting the researcher or re-running anything live. Main-agent-only. Rejected unless the case passed the full gate (CONFIRMED + target-only phase-2 replay). It certifies gate integrity and reproducible hashes — NOT that the target is still vulnerable at verification time.",
@@ -1701,6 +1710,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseGet",
+    approval: "read",
     label: "Get Case",
     description: "Get full details of a single case by ID.",
     promptSnippet: "Look up a specific case by ID",
@@ -1730,6 +1740,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseList",
+    approval: "read",
     label: "List Cases",
     description:
       "List cases from the ledger with optional filters. Returns paginated results with total count.",
@@ -1760,6 +1771,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseSearch",
+    approval: "read",
     label: "Search Cases",
     description:
       "Full-text search across cases. Optionally restrict to a specific field. Returns paginated results with total count.",
@@ -1788,6 +1800,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseLink",
+    approval: "write",
     label: "Link Cases",
     description:
       "Bidirectionally link two cases. Use to build exploit chains. Optional `kind` records the relationship (duplicate | related | blocks | depends-on | caused-by | supersedes | mitigates | same-root-cause).",
@@ -1860,6 +1873,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseUnlink",
+    approval: "write",
     label: "Unlink Cases",
     description: "Remove a bidirectional link between two cases.",
     promptSnippet: "Remove a link between two cases",
@@ -1927,6 +1941,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ChainSuggest",
+    approval: "read",
     label: "Suggest Exploit Chains",
     description:
       "Scan non-terminal cases for exploitable chains (credential+endpoint→ATO, open-redirect+OAuth→token theft, XSS+state-changing→CSRF bypass, IDOR+user-data→mass leak, SSTI→RCE, race+payment→financial, info-disclosure+SSRF). Returns ranked candidates with confidence and a suggested link kind — the agent decides whether to CaseLink them or open an escalation case. Catches chain combinations the model may have missed.",
@@ -1976,6 +1991,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "CaseContext",
+    approval: "write",
     label: "Generate Case Context",
     description:
       "Generate the case context bundle for a confirmed or reported case under the casefile report directory (next to the casefile DB): full evidence, PoC verification log, disconfirmation attempt, links, and timeline, plus the target report path. The main agent turns this context into the final polished H1-style report. Hypothesis/investigating/blocked/killed cases are rejected — promote to confirmed first.",
@@ -2037,6 +2053,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "PipelineSubmit",
+    approval: "write",
     label: "Submit Stage Output",
     description:
       "Submit a pipeline stage's output (hunt, trace, skeptic, validate, chain, report) through the validation gate. Validates required fields against the stage spec (mirrors schemas/*.json), applies the deterministic pre-filter (test-path and file-existence filters on hunt findings, trivial dedup by file+class+line), and counts repair attempts (max 2, then rejected). A stage cannot advance on an invalid output — submit fixed output until accepted.",
@@ -2108,6 +2125,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadInit",
+    approval: "write",
     label: "Init Scratchpad",
     description:
       "Initialize a crash-recoverable artifact store for a pipeline run. Creates the directory structure and an initial state.json checkpoint. Idempotent — safe to call on resume without --fresh; returns the existing checkpoint if the run already exists.",
@@ -2146,6 +2164,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadResume",
+    approval: "read",
     label: "Resume Scratchpad",
     description:
       "Read the checkpoint and artifact listing for a pipeline run to decide where to resume. Returns the next phase to run (or null if done) and which phases already completed. Returns null if the run does not exist.",
@@ -2205,6 +2224,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadCheckpoint",
+    approval: "write",
     label: "Checkpoint Phase",
     description:
       "Mark a pipeline phase as complete in the scratchpad state.json. Records the completion timestamp, key IDs, and an optional summary. Idempotent — re-checkpointing a phase overwrites its summary/IDs without duplicating the completed_phases entry.",
@@ -2255,6 +2275,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadWrite",
+    approval: "write",
     label: "Write Artifact",
     description:
       "Write an intermediate artifact (recon map, trace output, verification log) to a phase's subdirectory in the scratchpad. Overwrites if the name exists. Artifact names are sanitized — path traversal is blocked.",
@@ -2301,6 +2322,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadRead",
+    approval: "read",
     label: "Read Artifact",
     description:
       "Read an artifact from a phase's subdirectory in the scratchpad. Returns null if the artifact is missing. Use to resume a phase from a prior run's intermediate output.",
@@ -2358,6 +2380,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadPhaseDone",
+    approval: "write",
     label: "Phase Done?",
     description:
       "Check whether a phase has already been checkpointed in the scratchpad — for idempotent re-run. Returns true if the phase is complete; skip re-dispatching it on resume.",
@@ -2401,6 +2424,7 @@ ${formatCaseDetail(record)}`,
 
   registerCaseTool({
     name: "ScratchpadClear",
+    approval: "write",
     label: "Clear Run",
     description:
       "Clear a single pipeline run's scratchpad directory. Used by --fresh for one run. Does not touch other runs. The run must be re-initialized with ScratchpadInit afterward.",
