@@ -2,7 +2,7 @@
 
 # XPI
 
-**Security tooling for the Pi agent** — casefile tracking, proof-carrying attestations, code search, and todos.
+**Security tooling for the Pi agent** — casefile tracking, proof-carrying attestations, code search, and todos. Runs on Pi, OMP, and PiG.
 
 [![npm version](https://img.shields.io/npm/v/@xaccefy/pi-xpi?style=flat-square&label=npm&color=cb3837)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
 [![npm downloads](https://img.shields.io/npm/dm/@xaccefy/pi-xpi?style=flat-square&label=downloads&color=4c9aff)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
@@ -23,23 +23,23 @@ XPI turns the Pi agent into a security researcher: a case ledger with enforced g
 
 ## Install
 
-Works on **Pi Agent**, its fork **OMP** (`@oh-my-pi/pi-coding-agent`), and **PiG** (Pi-in-Go, [pi-in-go.dev](https://pi-in-go.dev)). Pi and OMP each have their own native entry point — `pi.extensions` → a `<pkg>.ts` entry (Pi's `@earendil-works/*`), `omp.extensions` → a `<pkg>.omp.ts` entry (OMP's `@oh-my-pi/*`) — over a shared host-agnostic core, so neither build pulls in the other host's packages. PiG is a Go port of Pi that runs Pi's TypeScript extensions unchanged in an embedded Node runtime and reads the same `pi` block, so it loads the Pi entries as-is. The `omp` manifest adds a typed settings schema; skills and the specialist `task` agents load by convention; the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
+One codebase, three hosts — a shared host-agnostic core with a thin native entry per host, so no build pulls in another host's packages. (Internals in the [guide](docs/guide.md#hosts-pi-agent-omp-and-pig).)
+
+| Host | Binary | Install | Notes |
+|------|--------|---------|-------|
+| **Pi Agent** | `pi` | `pi install npm:@xaccefy/pi-xpi` | `@earendil-works/*`; reads the `pi` manifest |
+| **OMP** (`@oh-my-pi`) | `omp` | `omp install npm:@xaccefy/pi-xpi` | native `omp` manifest + settings schema + tool approval tiers |
+| **PiG** ([pi-in-go.dev](https://pi-in-go.dev)) | `pig` | `pig install npm:@xaccefy/pi-xpi` | Go port of Pi; runs the Pi entries unchanged in its embedded Node runtime |
+
+Or from a checkout, `./install.sh` auto-detects the host (pi → omp → pig) and also wires subagent dispatch and optional ast-grep structural search:
 
 ```bash
-./install.sh            # auto-detects pi, then omp, then pig in PATH
-./install.sh --pi       # force Pi  (installs pi-subagents + optional ast-grep structural search)
-./install.sh --pi --no-subagents  # minimal Pi install; use /xp lite because swarm dispatch is unavailable
-./install.sh --omp      # force OMP (copies agents/*.md to ~/.omp/agent/agents)
-./install.sh --pig      # force PiG (same flow as Pi, via the `pig` binary)
+./install.sh                       # auto-detect
+./install.sh --pi | --omp | --pig  # force a host
+./install.sh --pi --no-subagents   # minimal; /xp lite only (no swarm dispatch)
 ```
 
-Or install the npm package per host:
-
-```bash
-pi install npm:@xaccefy/pi-xpi     # Pi
-omp install npm:@xaccefy/pi-xpi    # OMP
-pig install npm:@xaccefy/pi-xpi    # PiG
-```
+All three hosts are verified to load XPI and register its tools (PiG via `pig … --validate-only`, OMP via `omp plugin doctor`).
 
 ## Quick start
 
@@ -51,7 +51,14 @@ pig install npm:@xaccefy/pi-xpi    # PiG
 
 Use `/xp` for the default bounded swarm workflow, or `/xp lite` for CTFs, focused reviews, and one-target work where dispatch is unnecessary. On Pi, swarm dispatches only `auditor`, `tracer`, `skeptic`, and `chain` via pi-subagents; on OMP it uses the native `task` tool with the same four agent names. Validation, patching, reporting, and `ConfirmFinding` stay with the main agent.
 
-Full tool reference, configuration, and pipeline docs: **[docs/guide.md](docs/guide.md)**.
+A confirmed case can emit a signed, hash-chained attestation (`CaseAttest`) that anyone verifies offline — no trust in the researcher, no live re-test — with the bundled zero-dependency CLI:
+
+```bash
+xpi-verify path/to/report/<case>.attestation.json
+# → recomputes every leaf + the chain root, checks the Ed25519 signature → VERIFIED / FAILED
+```
+
+Full tool reference, configuration, attestations, and pipeline docs: **[docs/guide.md](docs/guide.md)** · [docs/attestation.md](docs/attestation.md).
 
 ## Packages
 
@@ -66,5 +73,6 @@ Full tool reference, configuration, and pipeline docs: **[docs/guide.md](docs/gu
 ```bash
 bun install
 bun test --isolate
-bun run typecheck
+bun run typecheck        # Pi build (excludes the *.omp.ts entries)
+bun run typecheck:omp    # OMP entries, after: bun add -d @oh-my-pi/pi-coding-agent @oh-my-pi/pi-tui
 ```
