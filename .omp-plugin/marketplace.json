@@ -1,0 +1,24 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "xpi",
+  "owner": {
+    "name": "xaccefy"
+  },
+  "metadata": {
+    "description": "XPI — offensive security tooling for the Pi agent and its OMP fork."
+  },
+  "plugins": [
+    {
+      "name": "pi-xpi",
+      "description": "Casefile ledger with honest-PoC gates, proof-carrying attestations, exploit chains, a coverage matrix, and todos. Skills and the auditor/tracer/skeptic/chain task agents load by convention; web lookup and exploit_search are host-provided.",
+      "source": {
+        "source": "github",
+        "repo": "xaccefy/pi-xpi"
+      },
+      "category": "security",
+      "homepage": "https://github.com/xaccefy/pi-xpi",
+      "license": "MIT",
+      "keywords": ["security", "bug-bounty", "pentest", "ctf", "exploit"]
+    }
+  ]
+}

@@ -31,6 +31,7 @@
   },
   "files": [
     "plugin.json",
+    ".omp-plugin/",
     "agents/",
     "skills/",
     "schemas/",
@@ -55,6 +56,42 @@
       "agents": [
         "./agents"
       ]
+    }
+  },
+  "omp": {
+    "description": "Offensive security toolkit: casefile ledger with honest-PoC gates, proof-carrying attestations, exploit chains, coverage matrix, and todos. Skills (cyberwf, web-pentest, casefile) and the auditor/tracer/skeptic/chain task agents load by convention; web lookup and exploit_search are host-provided.",
+    "extensions": [
+      "./packages/pi-casefile/src/index.ts",
+      "./packages/pi-xtodo/index.ts"
+    ],
+    "settings": {
+      "xpMode": {
+        "type": "enum",
+        "values": [
+          "off",
+          "lite",
+          "swarm",
+          "on"
+        ],
+        "env": "PI_XP_MODE",
+        "description": "Casefile XP (offensive) mode override: swarm (bounded multi-agent pipeline), lite (single-agent), or off. Leave unset to control it per session with the /xp command; a value here overrides /xp."
+      },
+      "casefilePath": {
+        "type": "string",
+        "env": "PI_CASEFILE_PATH",
+        "description": "Override the SQLite casefile ledger path (default: <workspace>/.pi/casefile.db)."
+      },
+      "attestKey": {
+        "type": "string",
+        "env": "PI_ATTEST_KEY",
+        "description": "Path to an Ed25519 PKCS#8 PEM private key for signing CaseAttest attestations (unsigned if unset)."
+      },
+      "attestKeyPem": {
+        "type": "string",
+        "secret": true,
+        "env": "PI_ATTEST_KEY_PEM",
+        "description": "Inline Ed25519 PEM private key for signing attestations; takes precedence over attestKey."
+      }
     }
   },
   "dependencies": {

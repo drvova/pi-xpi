@@ -7,9 +7,12 @@
 #   ./install.sh --pi --no-subagents  # skip pi-subagents; use /xp lite on Pi
 #
 # Pi:  pi install <dir> + pi-subagents + optional pi-ast-grep (structural search)
-# OMP: omp install <dir>  (extensions + skills via the Agent Plugins manifest);
-#      specialist agents are copied to ~/.omp/agent/agents so the `task` tool can
-#      spawn auditor/tracer/skeptic/chain by name for /xp or /xp swarm.
+# OMP: omp install <dir>  (reads the first-class `omp` plugin manifest in
+#      package.json — extensions + settings — with skills via the Agent Plugins
+#      manifest); specialist agents are copied to ~/.omp/agent/agents so the
+#      `task` tool can spawn auditor/tracer/skeptic/chain by name for /xp or
+#      /xp swarm. XPI can also be added as an OMP marketplace plugin
+#      (.omp-plugin/marketplace.json).
 set -euo pipefail
 
 if [[ -n "${PI_XPI_INSTALLING:-}" ]]; then exit 0; fi
