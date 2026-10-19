@@ -20,7 +20,7 @@ import { withOmpMetadata } from "@xaccefy/pi-shared";
 import { Type } from "typebox";
 
 // Host-injected TUI / component values (Pi vs OMP). The per-host entry points
-// (`index.ts` for Pi, `index.omp.ts` for OMP) import these from their own
+// (`pi-xtodo.ts` for Pi, `pi-xtodo.omp.ts` for OMP) import these from their own
 // package and pass them in, so neither build pulls in the other host's
 // packages. Everything else in this module is host-agnostic.
 export interface XtodoHost {

@@ -1,7 +1,7 @@
 /**
  * OMP host entry point for the casefile extension.
  *
- * Mirror of `index.ts` (the Pi entry), but supplies the TUI primitives from
+ * Mirror of `pi-casefile.ts` (the Pi entry), but supplies the TUI primitives from
  * OMP's own `@oh-my-pi/pi-tui` so the OMP build never resolves the Pi packages.
  * OMP reads this via the `omp.extensions` manifest field.
  *

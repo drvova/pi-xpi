@@ -1,7 +1,7 @@
 /**
  * OMP host entry point for the todo extension.
  *
- * Mirror of `index.ts` (the Pi entry), but supplies the primitives from OMP's
+ * Mirror of `pi-xtodo.ts` (the Pi entry), but supplies the primitives from OMP's
  * own `@oh-my-pi/*` packages so the OMP build never resolves the Pi packages.
  * OMP reads this via the `omp.extensions` manifest field. The `pi` object is
  * cast once at this boundary (OMP's `ExtensionAPI` is a compatible superset of

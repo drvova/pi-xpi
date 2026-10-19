@@ -2,7 +2,7 @@
  * Pi host entry point for the casefile extension.
  *
  * Wires the host-agnostic extension in `extension.ts` with Pi's TUI primitives
- * from `@earendil-works/pi-tui`. The OMP-native entry is `index.omp.ts`, which
+ * from `@earendil-works/pi-tui`. The OMP-native entry is `pi-casefile.omp.ts`, which
  * supplies the same primitives from `@oh-my-pi/pi-tui`. Neither build pulls in
  * the other host's packages.
  *

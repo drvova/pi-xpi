@@ -24,21 +24,21 @@
     "registry": "https://registry.npmjs.org/"
   },
   "files": [
-    "index.ts",
-    "index.omp.ts",
+    "pi-xtodo.ts",
+    "pi-xtodo.omp.ts",
     "extension.ts",
     "README.md",
     "LICENSE"
   ],
-  "main": "index.ts",
+  "main": "pi-xtodo.ts",
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./pi-xtodo.ts"
     ]
   },
   "omp": {
     "extensions": [
-      "./index.omp.ts"
+      "./pi-xtodo.omp.ts"
     ]
   },
   "dependencies": {

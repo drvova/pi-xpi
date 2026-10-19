@@ -39,8 +39,8 @@
     "packages/pi-casefile/src/",
     "packages/pi-casefile/skills/",
     "packages/pi-casefile/bin/",
-    "packages/pi-xtodo/index.ts",
-    "packages/pi-xtodo/index.omp.ts",
+    "packages/pi-xtodo/pi-xtodo.ts",
+    "packages/pi-xtodo/pi-xtodo.omp.ts",
     "packages/pi-xtodo/extension.ts",
     "install.sh",
     "README.md",
@@ -48,8 +48,8 @@
   ],
   "pi": {
     "extensions": [
-      "./packages/pi-casefile/src/index.ts",
-      "./packages/pi-xtodo/index.ts"
+      "./packages/pi-casefile/src/pi-casefile.ts",
+      "./packages/pi-xtodo/pi-xtodo.ts"
     ],
     "skills": [
       "./skills"
@@ -63,8 +63,8 @@
   "omp": {
     "description": "Offensive security toolkit: casefile ledger with honest-PoC gates, proof-carrying attestations, exploit chains, coverage matrix, and todos. Skills (cyberwf, web-pentest, casefile) and the auditor/tracer/skeptic/chain task agents load by convention; web lookup and exploit_search are host-provided.",
     "extensions": [
-      "./packages/pi-casefile/src/index.omp.ts",
-      "./packages/pi-xtodo/index.omp.ts"
+      "./packages/pi-casefile/src/pi-casefile.omp.ts",
+      "./packages/pi-xtodo/pi-xtodo.omp.ts"
     ],
     "settings": {
       "xpMode": {

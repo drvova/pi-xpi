@@ -31,8 +31,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "files": [
-    "src/index.ts",
-    "src/index.omp.ts",
+    "src/pi-casefile.ts",
+    "src/pi-casefile.omp.ts",
     "src/extension.ts",
     "src/attestation.ts",
     "src/evidence.ts",
@@ -51,7 +51,7 @@
     "README.md",
     "LICENSE"
   ],
-  "main": "src/index.ts",
+  "main": "src/pi-casefile.ts",
   "bin": {
     "xpi-verify": "bin/xpi-verify.ts"
   },
@@ -61,7 +61,7 @@
   },
   "pi": {
     "extensions": [
-      "./src/index.ts"
+      "./src/pi-casefile.ts"
     ],
     "skills": [
       "./skills"
@@ -69,7 +69,7 @@
   },
   "omp": {
     "extensions": [
-      "./src/index.omp.ts"
+      "./src/pi-casefile.omp.ts"
     ]
   },
   "devDependencies": {

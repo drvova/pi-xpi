@@ -105,7 +105,7 @@ import {
 // The TUI values this extension renders with (`Text`, `matchesKey`,
 // `truncateToWidth`) are the one piece that differs between hosts: Pi exports
 // them from `@earendil-works/pi-tui`, OMP from `@oh-my-pi/pi-tui`. The per-host
-// entry points (`index.ts` for Pi, `index.omp.ts` for OMP) import them from
+// entry points (`pi-casefile.ts` for Pi, `pi-casefile.omp.ts` for OMP) import them from
 // their own package and pass them in, so neither build depends on the other
 // host's packages. Everything else here is host-agnostic.
 export interface CasefileHost {

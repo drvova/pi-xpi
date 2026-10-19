@@ -23,7 +23,7 @@ XPI turns the Pi agent into a security researcher: a case ledger with enforced g
 
 ## Install
 
-Works on **Pi Agent**, its fork **OMP** (`@oh-my-pi/pi-coding-agent`), and **PiG** (Pi-in-Go, [pi-in-go.dev](https://pi-in-go.dev)). Pi and OMP each have their own native entry point — `pi.extensions` → `index.ts` (Pi's `@earendil-works/*`), `omp.extensions` → `index.omp.ts` (OMP's `@oh-my-pi/*`) — over a shared host-agnostic core, so neither build pulls in the other host's packages. PiG is a Go port of Pi that runs Pi's TypeScript extensions unchanged in an embedded Node runtime and reads the same `pi` block, so it loads the Pi entry as-is. The `omp` manifest adds a typed settings schema; skills and the specialist `task` agents load by convention; the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
+Works on **Pi Agent**, its fork **OMP** (`@oh-my-pi/pi-coding-agent`), and **PiG** (Pi-in-Go, [pi-in-go.dev](https://pi-in-go.dev)). Pi and OMP each have their own native entry point — `pi.extensions` → a `<pkg>.ts` entry (Pi's `@earendil-works/*`), `omp.extensions` → a `<pkg>.omp.ts` entry (OMP's `@oh-my-pi/*`) — over a shared host-agnostic core, so neither build pulls in the other host's packages. PiG is a Go port of Pi that runs Pi's TypeScript extensions unchanged in an embedded Node runtime and reads the same `pi` block, so it loads the Pi entries as-is. The `omp` manifest adds a typed settings schema; skills and the specialist `task` agents load by convention; the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
 
 ```bash
 ./install.sh            # auto-detects pi, then omp, then pig in PATH
