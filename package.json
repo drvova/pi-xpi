@@ -40,6 +40,8 @@
     "packages/pi-casefile/skills/",
     "packages/pi-casefile/bin/",
     "packages/pi-xtodo/index.ts",
+    "packages/pi-xtodo/index.omp.ts",
+    "packages/pi-xtodo/extension.ts",
     "install.sh",
     "README.md",
     "LICENSE"
@@ -61,8 +63,8 @@
   "omp": {
     "description": "Offensive security toolkit: casefile ledger with honest-PoC gates, proof-carrying attestations, exploit chains, coverage matrix, and todos. Skills (cyberwf, web-pentest, casefile) and the auditor/tracer/skeptic/chain task agents load by convention; web lookup and exploit_search are host-provided.",
     "extensions": [
-      "./packages/pi-casefile/src/index.ts",
-      "./packages/pi-xtodo/index.ts"
+      "./packages/pi-casefile/src/index.omp.ts",
+      "./packages/pi-xtodo/index.omp.ts"
     ],
     "settings": {
       "xpMode": {
@@ -145,6 +147,7 @@
     "lint:fix": "biome check . --write",
     "format": "biome format . --write",
     "typecheck": "tsc --noEmit --project tsconfig.json",
+    "typecheck:omp": "tsc --noEmit --project tsconfig.omp.json",
     "version:patch": "node scripts/bump-version.js patch && bun install --lockfile-only",
     "version:minor": "node scripts/bump-version.js minor && bun install --lockfile-only",
     "version:major": "node scripts/bump-version.js major && bun install --lockfile-only",

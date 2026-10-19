@@ -32,6 +32,8 @@
   },
   "files": [
     "src/index.ts",
+    "src/index.omp.ts",
+    "src/extension.ts",
     "src/attestation.ts",
     "src/evidence.ts",
     "src/harness-verify.ts",
@@ -63,6 +65,11 @@
     ],
     "skills": [
       "./skills"
+    ]
+  },
+  "omp": {
+    "extensions": [
+      "./src/index.omp.ts"
     ]
   },
   "devDependencies": {

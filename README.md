@@ -23,7 +23,7 @@ XPI turns the Pi agent into a security researcher: a case ledger with enforced g
 
 ## Install
 
-Works on **Pi Agent** and its fork **OMP** (`@oh-my-pi/pi-coding-agent`). Pi reads the `pi` manifest field; OMP reads a first-class `omp` plugin manifest (extensions + settings) and falls back to `pi`. Skills and the specialist `task` agents load by convention, and the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
+Works on **Pi Agent** and its fork **OMP** (`@oh-my-pi/pi-coding-agent`). Each host has its own native entry point — `pi.extensions` → `index.ts` (Pi's `@earendil-works/*`), `omp.extensions` → `index.omp.ts` (OMP's `@oh-my-pi/*`) — over a shared host-agnostic core, so neither build pulls in the other host's packages. The `omp` manifest adds a typed settings schema; skills and the specialist `task` agents load by convention; the Agent Plugins `plugin.json` is the portable skills/MCP manifest.
 
 ```bash
 ./install.sh            # auto-detects pi or omp in PATH

@@ -1,0 +1,11 @@
+{
+  "//": "Opt-in typecheck of the OMP-native entry points. Requires the OMP packages (@oh-my-pi/pi-coding-agent, @oh-my-pi/pi-tui) to be installed. Run: bun add -d @oh-my-pi/pi-coding-agent @oh-my-pi/pi-tui && tsc --noEmit --project tsconfig.omp.json. The default tsconfig.json excludes *.omp.ts so the base build does not require OMP to be installed.",
+  "extends": "./tsconfig.json",
+  "include": [
+    "packages/pi-casefile/src/index.omp.ts",
+    "packages/pi-casefile/src/extension.ts",
+    "packages/pi-xtodo/index.omp.ts",
+    "packages/pi-xtodo/extension.ts"
+  ],
+  "exclude": []
+}

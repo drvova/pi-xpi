@@ -25,6 +25,8 @@
   },
   "files": [
     "index.ts",
+    "index.omp.ts",
+    "extension.ts",
     "README.md",
     "LICENSE"
   ],
@@ -32,6 +34,11 @@
   "pi": {
     "extensions": [
       "./index.ts"
+    ]
+  },
+  "omp": {
+    "extensions": [
+      "./index.omp.ts"
     ]
   },
   "dependencies": {

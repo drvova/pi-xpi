@@ -6,7 +6,7 @@ Full reference: tools, configuration, pipeline, and development. The root [READM
 
 XPI runs on **Pi Agent** (`@earendil-works/pi-coding-agent`) and its fork **OMP** (`@oh-my-pi/pi-coding-agent`, binary `omp`). The same extension code, tools, ledger, and XP-mode workflow are used on both:
 
-- **Manifests** — Pi reads the `pi` field in `package.json`. OMP reads the `omp` field first and falls back to `pi`, so XPI ships a first-class `omp` plugin manifest (extensions + a typed settings schema) rather than relying on the legacy `pi` fallback. Both fields list the same two extension entry points (`pi-casefile`, `pi-xtodo`). The root `plugin.json` (Agent Plugins 1.0.0) is the portable manifest OMP's `agent-plugins` provider uses for skills and `mcp.json`.
+- **Manifests + per-host entry points** — Pi reads the `pi` field, OMP reads the `omp` field (falling back to `pi`). Each field points at a **host-native entry file**, so neither build resolves the other host's packages: `pi.extensions` → `index.ts` (imports Pi's `@earendil-works/*` TUI primitives), `omp.extensions` → `index.omp.ts` (imports OMP's `@oh-my-pi/*`). Both entries are thin wrappers over a shared, host-agnostic `extension.ts` that receives the host's UI primitives as a parameter (`Text`, `matchesKey`, `truncateToWidth`, …); only those few values differ between forks. `typebox` schemas and type-only imports are shared (TypeBox is OMP's sanctioned extension-schema path). The `omp` manifest also carries a typed settings schema. The root `plugin.json` (Agent Plugins 1.0.0) is the portable manifest OMP's `agent-plugins` provider uses for skills and `mcp.json`.
 - **Settings (OMP)** — the `omp.settings` schema surfaces XPI's configuration in OMP with an environment-variable fallback: `xpMode` → `PI_XP_MODE`, `casefilePath` → `PI_CASEFILE_PATH`, `attestKey` → `PI_ATTEST_KEY`, and `attestKeyPem` (secret) → `PI_ATTEST_KEY_PEM`. `xpMode` has **no default** so it never overrides the `/xp` toggle unless you set it explicitly. On Pi the same configuration is read directly from the environment variables (see [Configuration](#configuration)).
 - **Native tool metadata** — every XPI tool carries OMP's native `ToolDefinition` fields alongside the Pi ones, so OMP gates it correctly instead of defaulting everything to the `exec` tier. Each tool declares an `approval` tier — `read` (lookups: CaseGet/List/Search, CoverageReport, ChainSuggest, ScratchpadRead/Resume), `write` (ledger mutations, EvidenceAdd, CaseAttest, scratchpad writes, PipelineSubmit), or `exec` (PromoteFinding and ConfirmFinding, which run the PoC and the harness replay). The metadata is attached with `withOmpMetadata` (in `@xaccefy/pi-shared`) so the Pi host simply ignores the extra keys; the Pi prompt surface (`promptSnippet`/`promptGuidelines`) is unchanged.
 - **Documentation composition** — a plugin contributes its instructional surface through OMP's providers, discovered by convention at the package root: `skills/` (`cyberwf`, `web-pentest`, `casefile` — each a `skills/<name>/SKILL.md` with a `name` + `description` the system prompt composes, body loaded on demand) and `agents/` (the `auditor`/`tracer`/`skeptic`/`chain` task agents). The mode-gated cyber workflow is composed per prompt by the extension's `before_agent_start` handler on both hosts. The `.omp-plugin/marketplace.json` catalog lets XPI be added as an OMP marketplace plugin.
@@ -113,9 +113,10 @@ construction, and key setup: **[docs/attestation.md](attestation.md)**.
 pi-xpi/
 ├── agents/                  # auditor, tracer, skeptic, chain
 ├── packages/
-│   ├── pi-casefile          # ledger, poc-runner, workflow, scratchpad, attestation (+ bin/xpi-verify)
-│   ├── pi-shared
-│   └── pi-xtodo
+│   ├── pi-casefile          # extension.ts (shared) + index.ts (Pi entry) + index.omp.ts (OMP entry);
+│   │                        #   ledger, poc-runner, workflow, scratchpad, attestation (+ bin/xpi-verify)
+│   ├── pi-shared            # cache, ip-safety, omp-tool (host metadata)
+│   └── pi-xtodo             # extension.ts (shared) + index.ts (Pi entry) + index.omp.ts (OMP entry)
 ├── schemas/                 # stage-finding, stage-trace, stage-skeptic, stage-validation, stage-chain, stage-report
 ├── scripts/                 # bump-version
 ├── skills/                  # web-pentest, cyberwf (auto-loaded)
@@ -128,7 +129,16 @@ pi-xpi/
 ```bash
 bun install
 bun test --isolate
-bun run typecheck
+bun run typecheck        # Pi build; excludes the *.omp.ts entries
+```
+
+The default typecheck excludes the `*.omp.ts` entries so the base build needs
+only the Pi (`@earendil-works/*`) packages. To verify the OMP-native entries,
+install the OMP packages and run the opt-in config:
+
+```bash
+bun add -d @oh-my-pi/pi-coding-agent @oh-my-pi/pi-tui
+bun run typecheck:omp    # tsconfig.omp.json — checks index.omp.ts against @oh-my-pi/*
 ```
 
 **Release (CI):** GitHub Actions → **Release** workflow → choose `patch` / `minor` / `major`.
