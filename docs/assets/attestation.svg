@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="Attestation flow: the PoC gate's target-only verdict becomes a hash-chained, signed manifest that xpi-verify checks offline.">
+  <defs>
+    <linearGradient id="abg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1020"/><stop offset="1" stop-color="#0b1a22"/>
+    </linearGradient>
+    <marker id="a2" markerWidth="12" markerHeight="12" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 Z" fill="#6b7398"/>
+    </marker>
+    <style>
+      text { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .t { font-weight: 800; fill: #e9e6ff; }
+      .d { fill: #8b93b8; }
+      .code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="296" rx="22" fill="url(#abg)" stroke="#223049" stroke-width="2"/>
+  <text x="40" y="52" class="t" font-size="22">Proof-carrying attestation</text>
+  <text x="40" y="80" class="d" font-size="15">a confirmed finding becomes a tamper-evident, signed manifest anyone verifies offline</text>
+
+  <!-- stage 1: gate -->
+  <g transform="translate(40,112)">
+    <rect width="252" height="150" rx="14" fill="#171433" stroke="#8b5cf6" stroke-width="2"/>
+    <text x="20" y="38" class="t" font-size="17">1 · PoC gate</text>
+    <text x="20" y="66" class="code" font-size="12.5" fill="#c4b5fd">PromoteFinding → ConfirmFinding</text>
+    <text x="20" y="92" class="d" font-size="13">DNS-pinned differential replay</text>
+    <text x="20" y="114" class="d" font-size="13">conclusive <tspan fill="#34d399" font-weight="700">target_only</tspan> verdict</text>
+    <text x="20" y="136" class="d" font-size="13">main-agent semantic decision</text>
+  </g>
+  <path d="M296,187 L336,187" fill="none" stroke="#6b7398" stroke-width="2.5" marker-end="url(#a2)"/>
+
+  <!-- stage 2: CaseAttest -->
+  <g transform="translate(344,112)">
+    <rect width="252" height="150" rx="14" fill="#1a1636" stroke="#a78bfa" stroke-width="2"/>
+    <text x="20" y="38" class="t" font-size="17">2 · CaseAttest</text>
+    <text x="20" y="66" class="code" font-size="12.5" fill="#a5b4fc">attestation.json</text>
+    <text x="20" y="92" class="d" font-size="13">canonical, ordered leaves</text>
+    <text x="20" y="114" class="d" font-size="13">SHA-256 hash chain</text>
+    <text x="20" y="136" class="d" font-size="13">Ed25519 signature (opt.)</text>
+  </g>
+  <path d="M600,187 L640,187" fill="none" stroke="#6b7398" stroke-width="2.5" marker-end="url(#a2)"/>
+
+  <!-- stage 3: xpi-verify -->
+  <g transform="translate(648,112)">
+    <rect width="252" height="150" rx="14" fill="#0f2230" stroke="#22d3ee" stroke-width="2"/>
+    <text x="20" y="38" class="t" font-size="17">3 · xpi-verify</text>
+    <text x="20" y="66" class="code" font-size="12.5" fill="#7dd3fc">zero-dependency CLI</text>
+    <text x="20" y="92" class="d" font-size="13">recompute every leaf</text>
+    <text x="20" y="114" class="d" font-size="13">check chain root + signature</text>
+    <text x="20" y="136" class="d" font-size="13">no researcher trust needed</text>
+  </g>
+  <path d="M904,187 L944,187" fill="none" stroke="#6b7398" stroke-width="2.5" marker-end="url(#a2)"/>
+
+  <!-- stage 4: verdict -->
+  <g transform="translate(952,112)">
+    <rect width="208" height="150" rx="14" fill="#0e2a1e" stroke="#34d399" stroke-width="2.5"/>
+    <g transform="translate(104,58)">
+      <circle r="26" fill="none" stroke="#34d399" stroke-width="4"/>
+      <path d="M-12,2 L-3,12 L14,-10" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="104" y="112" text-anchor="middle" class="t" font-size="20" fill="#6ee7b7">VERIFIED</text>
+    <text x="104" y="136" text-anchor="middle" class="d" font-size="12">integrity, not a live re-test</text>
+  </g>
+</svg>

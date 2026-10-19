@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/banner.svg" alt="XPI — security tooling for the Pi agent. Runs on Pi, OMP, and PiG." width="100%">
+
 # XPI
 
 **Security tooling for the Pi agent** — casefile tracking, proof-carrying attestations, code search, and todos. Runs on Pi, OMP, and PiG.
@@ -24,6 +26,8 @@ XPI turns the Pi agent into a security researcher: a case ledger with enforced g
 ## Install
 
 One codebase, three hosts — a shared host-agnostic core with a thin native entry per host, so no build pulls in another host's packages. (Internals in the [guide](docs/guide.md#hosts-pi-agent-omp-and-pig).)
+
+<p align="center"><img src="docs/assets/hosts.svg" alt="One shared core with a native entry per host: Pi, OMP, and PiG." width="100%"></p>
 
 | Host | Binary | Install | Notes |
 |------|--------|---------|-------|
@@ -52,6 +56,8 @@ All three hosts are verified to load XPI and register its tools (PiG via `pig �
 Use `/xp` for the default bounded swarm workflow, or `/xp lite` for CTFs, focused reviews, and one-target work where dispatch is unnecessary. On Pi, swarm dispatches only `auditor`, `tracer`, `skeptic`, and `chain` via pi-subagents; on OMP it uses the native `task` tool with the same four agent names. Validation, patching, reporting, and `ConfirmFinding` stay with the main agent.
 
 A confirmed case can emit a signed, hash-chained attestation (`CaseAttest`) that anyone verifies offline — no trust in the researcher, no live re-test — with the bundled zero-dependency CLI:
+
+<p align="center"><img src="docs/assets/attestation.svg" alt="Attestation flow: PoC gate target_only verdict → CaseAttest hash-chained signed manifest → xpi-verify → VERIFIED." width="100%"></p>
 
 ```bash
 xpi-verify path/to/report/<case>.attestation.json
