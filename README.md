@@ -1,10 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/banner.svg" alt="XPI — security tooling for the Pi agent. Runs on Pi, OMP, and PiG." width="100%">
-
-# XPI
-
-**Security tooling for the Pi agent** — casefile tracking, proof-carrying attestations, code search, and todos. Runs on Pi, OMP, and PiG.
+<img src="docs/assets/banner.svg" alt="XPI — security tooling for the Pi agent: casefile tracking, proof-carrying attestations, code search, and todos. Runs on Pi, OMP, and PiG." width="100%">
 
 [![npm version](https://img.shields.io/npm/v/@xaccefy/pi-xpi?style=flat-square&label=npm&color=cb3837)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
 [![npm downloads](https://img.shields.io/npm/dm/@xaccefy/pi-xpi?style=flat-square&label=downloads&color=4c9aff)](https://www.npmjs.com/package/@xaccefy/pi-xpi)
